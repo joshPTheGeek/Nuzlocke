@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soul Link Nuzlocke: FireRed & LeafGreen</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --gba-purple: #2d1b4e;
+            --gba-screen-bg: #e0f8cf;
+            --pkmn-red: #cc0000;
+            --pkmn-blue: #3b4cca;
+            --pkmn-ui-blue: #3050c0;
+        }
+
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #202020;
+            /* Retro checkered background */
+            background-image: 
+                linear-gradient(45deg, #252525 25%, transparent 25%), 
+                linear-gradient(-45deg, #252525 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #252525 75%), 
+                linear-gradient(-45deg, transparent 75%, #252525 75%);
+            background-size: 40px 40px;
+            color: #333;
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+
+        input[type="text"] {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.65rem;
+            outline: none;
+            background: rgba(255,255,255,0.5);
+            border: 2px solid transparent;
+            border-bottom: 2px solid #a0a0a0;
+            padding: 6px;
+            width: 100%;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        input[type="text"]:focus {
+            background: white;
+            border-bottom-color: var(--pkmn-ui-blue);
+        }
+
+        /* Dead State Styles */
+        .status-dead {
+            filter: grayscale(100%) contrast(1.1);
+            opacity: 0.8;
+            background-color: #dcdcdc !important;
+            border-color: #555 !important;
+        }
+        .status-dead input {
+            text-decoration: line-through;
+            color: #555;
+        }
+
+        /* Animations */
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+        .animate-happy {
+            animation: bounce 2s infinite;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #2d1b4e; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+
+        .screen-container {
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+        }
+        
+        .pixel-shadow {
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- ICONS ---
+
+        const HappyFaceIcon = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" className="text-yellow-500 animate-happy filter drop-shadow-sm">
+                <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-9h2v2H7zm8 0h2v2h-2zm-4 4c-2.33 0-4.31 1.46-5.11 3.5h10.22c-.8-2.04-2.78-3.5-5.11-3.5z"/>
+                {/* Cheeks */}
+                <circle cx="5.5" cy="13.5" r="1.5" fill="#ff4444" opacity="0.6" />
+                <circle cx="18.5" cy="13.5" r="1.5" fill="#ff4444" opacity="0.6" />
+            </svg>
+        );
+
+        const SkullIcon = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" className="text-gray-700">
+                <path fill="currentColor" d="M12 2c-4.42 0-8 3.58-8 8 0 2.23.91 4.24 2.38 5.71L5 18h14l-1.38-2.29C19.09 14.24 20 12.23 20 10c0-4.42-3.58-8-8-8zm0 10c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm-4-2c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2 .9 2 2 2z"/>
+                <path fill="currentColor" d="M8 19h2v3H8zm6 0h2v3h-2z"/>
+            </svg>
+        );
+
+        const TrashIcon = () => (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                <path d="M3 6l3 18h12l3-18h-18zm19-4v2h-20v-2h5.711c.9 0 1.631-1.099 1.631-2h5.316c0 .901.73 2 1.631 2h5.711z"/>
+            </svg>
+        );
+
+        const SaveIcon = () => (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+            </svg>
+        );
+
+        // --- AUDIO ENGINE ---
+        const AudioEngine = {
+            ctx: null,
+            init: () => {
+                if (!AudioEngine.ctx) AudioEngine.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            },
+            play: (type) => {
+                AudioEngine.init();
+                const ctx = AudioEngine.ctx;
+                if(ctx.state === 'suspended') ctx.resume();
+                
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                const now = ctx.currentTime;
+
+                if (type === 'tap') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(600, now + 0.05);
+                    gain.gain.setValueAtTime(0.05, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                } else if (type === 'dead') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.linearRampToValueAtTime(80, now + 0.4);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.4);
+                    osc.start(now);
+                    osc.stop(now + 0.4);
+                } else if (type === 'revive') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.linearRampToValueAtTime(880, now + 0.1); // Fast happy ping
+                    osc.frequency.linearRampToValueAtTime(1200, now + 0.2);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                }
+            }
+        };
+
+        // --- MAIN ROW COMPONENT ---
+        const SoulLinkRow = ({ link, onUpdate, onDelete }) => {
+            const isDead = link.status === 'dead';
+
+            const toggleStatus = () => {
+                const newStatus = isDead ? 'alive' : 'dead';
+                AudioEngine.play(newStatus === 'dead' ? 'dead' : 'revive');
+                onUpdate(link.id, { ...link, status: newStatus });
+            };
+
+            const handleInput = (field, value) => {
+                onUpdate(link.id, { ...link, [field]: value });
+            };
+
+            return (
+                <div className={`
+                    relative p-3 mb-4 border-4 rounded-sm transition-all duration-300 pixel-shadow
+                    ${isDead ? 'status-dead border-gray-600 bg-gray-200' : 'border-indigo-900 bg-white'}
+                `}>
+                    {/* Header: Zone Name & Status Toggle */}
+                    <div className="flex justify-between items-start mb-3 border-b-2 border-gray-200 pb-2">
+                        <div className="w-2/3">
+                            <label className="text-[8px] text-gray-500 uppercase tracking-widest block mb-1">Zone / Route</label>
+                            <input 
+                                type="text" 
+                                placeholder="e.g. Route 1"
+                                value={link.zone}
+                                onChange={(e) => handleInput('zone', e.target.value)}
+                                className="font-bold text-indigo-900 uppercase"
+                            />
+                        </div>
+                        
+                        {/* Status Toggle Button */}
+                        <button 
+                            onClick={toggleStatus}
+                            className={`
+                                flex flex-col items-center justify-center p-2 rounded-md border-2 transition-transform active:scale-95
+                                ${isDead 
+                                    ? 'bg-gray-300 border-gray-500 text-gray-600' 
+                                    : 'bg-yellow-100 border-yellow-400 text-yellow-800 hover:bg-yellow-200'}
+                            `}
+                            title="Toggle Alive/Dead Status"
+                        >
+                            {isDead ? <SkullIcon /> : <HappyFaceIcon />}
+                            <span className="text-[8px] mt-1 font-bold">{isDead ? "DEAD" : "ALIVE"}</span>
+                        </button>
+                    </div>
+
+                    {/* Pokemon Inputs */}
+                    <div className="grid grid-cols-2 gap-4">
+                        {/* P1 */}
+                        <div className="bg-red-50 p-2 rounded border border-red-100">
+                            <div className="flex items-center gap-2 mb-1">
+                                <div className="w-3 h-3 bg-red-500 rounded-full border border-black"></div>
+                                <label className="text-[8px] font-bold text-red-800">FIRE RED</label>
+                            </div>
+                            <input 
+                                type="text" 
+                                placeholder="Pokemon..." 
+                                value={link.p1}
+                                onChange={(e) => handleInput('p1', e.target.value)}
+                            />
+                        </div>
+
+                        {/* P2 */}
+                        <div className="bg-green-50 p-2 rounded border border-green-100">
+                            <div className="flex items-center gap-2 mb-1">
+                                <div className="w-3 h-3 bg-green-500 rounded-full border border-black"></div>
+                                <label className="text-[8px] font-bold text-green-800">LEAF GREEN</label>
+                            </div>
+                            <input 
+                                type="text" 
+                                placeholder="Pokemon..." 
+                                value={link.p2}
+                                onChange={(e) => handleInput('p2', e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Delete Button */}
+                    <button 
+                        onClick={() => {
+                            if(confirm("Release this link permanently?")) onDelete(link.id);
+                        }}
+                        className="absolute -top-3 -right-2 bg-red-600 hover:bg-red-700 text-white p-1 border-2 border-black shadow-md active:translate-y-1"
+                        title="Delete Entry"
+                    >
+                        <TrashIcon />
+                    </button>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            // Initialize state from LocalStorage if available
+            const [links, setLinks] = useState(() => {
+                const saved = localStorage.getItem('soulLinkData');
+                return saved ? JSON.parse(saved) : [];
+            });
+            const [showMenu, setShowMenu] = useState(false);
+
+            // Auto-Save Effect
+            useEffect(() => {
+                localStorage.setItem('soulLinkData', JSON.stringify(links));
+            }, [links]);
+
+            const addLink = () => {
+                AudioEngine.play('tap');
+                const newLink = {
+                    id: Date.now(),
+                    zone: '',
+                    p1: '',
+                    p2: '',
+                    status: 'alive'
+                };
+                // Add to top of list
+                setLinks([newLink, ...links]);
+            };
+
+            const updateLink = (id, updatedData) => {
+                setLinks(links.map(l => l.id === id ? updatedData : l));
+            };
+
+            const deleteLink = (id) => {
+                AudioEngine.play('dead');
+                setLinks(links.filter(l => l.id !== id));
+            };
+
+            // Download JSON Backup
+            const saveToFile = () => {
+                const dataStr = JSON.stringify(links, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.download = `soullink_backup_${new Date().toISOString().slice(0,10)}.json`;
+                link.href = url;
+                link.click();
+                setShowMenu(false);
+            };
+
+            // Load JSON Backup
+            const loadFromFile = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        if (Array.isArray(data)) {
+                            setLinks(data);
+                            alert("Save file loaded successfully!");
+                        } else {
+                            alert("Invalid save file format.");
+                        }
+                    } catch (err) {
+                        alert("Error reading file.");
+                    }
+                };
+                reader.readAsText(file);
+                setShowMenu(false);
+            };
+
+            // Stats
+            const aliveCount = links.filter(l => l.status === 'alive').length;
+            const deadCount = links.filter(l => l.status === 'dead').length;
+
+            return (
+                <div className="min-h-screen pb-24 max-w-lg mx-auto relative bg-[#2d1b4e] shadow-2xl border-x-4 border-[#1a1030]">
+                    
+                    {/* Header */}
+                    <div className="bg-[#506880] p-3 border-b-8 border-[#2d1b4e] sticky top-0 z-40 shadow-lg flex justify-between items-center">
+                        <div className="flex flex-col">
+                            <h1 className="text-white text-xs tracking-widest text-shadow">SOUL LINK</h1>
+                            <div className="flex gap-2 text-[8px] text-gray-300 mt-1">
+                                <span className="text-green-300">ALIVE: {aliveCount}</span>
+                                <span className="text-red-300">DEAD: {deadCount}</span>
+                            </div>
+                        </div>
+                        
+                        {/* Settings / Save Menu Button */}
+                        <button 
+                            onClick={() => setShowMenu(!showMenu)}
+                            className="bg-gray-700 text-white p-2 rounded border-2 border-gray-900 hover:bg-gray-600 active:scale-95"
+                        >
+                            <SaveIcon />
+                        </button>
+                    </div>
+
+                    {/* Settings Menu Overlay */}
+                    {showMenu && (
+                        <div className="absolute top-16 right-2 left-2 z-50 bg-white border-4 border-black p-4 shadow-xl rounded animate-bounce-in">
+                            <h3 className="text-xs font-bold mb-4 border-b-2 pb-2">GAME CARTRIDGE MENU</h3>
+                            <button onClick={saveToFile} className="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 py-3 mb-2 border-2 border-blue-300 text-[10px] font-bold">
+                                💾 SAVE BACKUP (.JSON)
+                            </button>
+                            <div className="relative w-full">
+                                <button className="w-full bg-orange-100 hover:bg-orange-200 text-orange-800 py-3 border-2 border-orange-300 text-[10px] font-bold">
+                                    📂 LOAD BACKUP
+                                </button>
+                                <input 
+                                    type="file" 
+                                    onChange={loadFromFile} 
+                                    accept=".json" 
+                                    className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                                />
+                            </div>
+                            <button onClick={() => setShowMenu(false)} className="w-full mt-4 text-center text-[10px] text-gray-500 underline">
+                                CLOSE MENU
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Main List Area */}
+                    <div className="p-4 bg-[#e0f8cf] min-h-[calc(100vh-140px)] screen-container relative">
+                        {/* LCD Grid/Scanline effect */}
+                        <div className="absolute inset-0 pointer-events-none opacity-10" 
+                             style={{backgroundImage: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06))', backgroundSize: '100% 2px, 3px 100%'}}>
+                        </div>
+
+                        {links.length === 0 && (
+                            <div className="text-center py-20 opacity-40 select-none">
+                                <div className="text-4xl mb-4">👾</div>
+                                <p className="text-xs mb-2">NO DATA</p>
+                                <p className="text-[9px]">PRESS START TO BEGIN</p>
+                            </div>
+                        )}
+
+                        <div className="space-y-4 pb-4">
+                            {links.map(link => (
+                                <SoulLinkRow 
+                                    key={link.id}
+                                    link={link}
+                                    onUpdate={updateLink}
+                                    onDelete={deleteLink}
+                                />
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Footer Controls */}
+                    <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#2d1b4e] border-t-4 border-[#1a1030] flex justify-center items-center gap-4 max-w-lg mx-auto z-40">
+                        <button 
+                            onClick={addLink}
+                            className="
+                                w-full bg-[#f0f0f0] text-[#2d1b4e] 
+                                font-bold py-4 px-6 
+                                shadow-[0_4px_0_#888] active:shadow-none active:translate-y-1
+                                rounded border-2 border-[#888]
+                                flex items-center justify-center gap-3
+                                transition-all hover:bg-white
+                            "
+                        >
+                            <div className="w-6 h-6 rounded-full border-2 border-black flex items-center justify-center bg-red-500 text-white leading-none pb-0.5">+</div>
+                            <span className="text-xs tracking-wider">NEW ENCOUNTER</span>
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
