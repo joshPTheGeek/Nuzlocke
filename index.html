@@ -15,8 +15,11 @@
         :root {
             --gba-purple: #2d1b4e;
             --gba-screen-bg: #e0f8cf;
+            --pkmn-red: #cc0000;
+            --pkmn-blue: #3b4cca;
             --pkmn-ui-blue: #3050c0;
         }
+
         body {
             font-family: 'Press Start 2P', cursive;
             background-color: #202020;
@@ -28,110 +31,202 @@
             background-size: 40px 40px;
             color: #333;
             overflow-x: hidden;
+            touch-action: manipulation;
         }
+
         input[type="text"], input[type="password"] {
             font-family: 'Press Start 2P', cursive;
             font-size: 0.65rem;
             outline: none;
             background: rgba(255,255,255,0.5);
+            border: 2px solid transparent;
             border-bottom: 2px solid #a0a0a0;
             padding: 6px;
             width: 100%;
+            border-radius: 4px;
+            transition: all 0.2s;
         }
-        .status-dead { filter: grayscale(100%); opacity: 0.8; background-color: #dcdcdc !important; }
-        .pixel-shadow { box-shadow: 4px 4px 0 rgba(0,0,0,0.3); }
-        .screen-container { box-shadow: inset 0 0 20px rgba(0,0,0,0.2); position: relative; }
+        input[type="text"]:focus {
+            background: white;
+            border-bottom-color: var(--pkmn-ui-blue);
+        }
+
+        .status-dead {
+            filter: grayscale(100%) contrast(1.1);
+            opacity: 0.8;
+            background-color: #dcdcdc !important;
+            border-color: #555 !important;
+        }
+        .status-dead input {
+            text-decoration: line-through;
+            color: #555;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+        .animate-happy {
+            animation: bounce 2s infinite;
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #2d1b4e; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+
+        .screen-container {
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+        }
+        
+        .pixel-shadow {
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
-    <!-- This script handles the React UI and Firebase logic together using Babel -->
     <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
         import { getFirestore, doc, onSnapshot, setDoc, collection, query, orderBy, deleteDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
-        // Your web app's Firebase configuration
+        // --- FIREBASE CONFIG ---
         const firebaseConfig = {
             apiKey: "AIzaSyCX6il-7t1C_mFOQq8KEL_NuOIYOGKpgws",
             authDomain: "josh-and-tom-nuzlocke.firebaseapp.com",
             projectId: "josh-and-tom-nuzlocke",
             storageBucket: "josh-and-tom-nuzlocke.firebasestorage.app",
-            messagingSenderId: "596955970030",
-            appId: ":596955970030:web:4296388a8c62a3375eb6ff"
+            messagingSenderId: "5969970030",
+            appId: "1:596955970030:web:4296388a8c62a3375eb6ff"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
 
         const { useState, useEffect } = React;
 
+        // --- ICONS ---
+        const HappyFaceIcon = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" className="text-yellow-500 animate-happy filter drop-shadow-sm">
+                <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-9h2v2H7zm8 0h2v2h-2zm-4 4c-2.33 0-4.31 1.46-5.11 3.5h10.22c-.8-2.04-2.78-3.5-5.11-3.5z"/>
+                <circle cx="5.5" cy="13.5" r="1.5" fill="#ff4444" opacity="0.6" />
+                <circle cx="18.5" cy="13.5" r="1.5" fill="#ff4444" opacity="0.6" />
+            </svg>
+        );
+
+        const SkullIcon = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" className="text-gray-700">
+                <path fill="currentColor" d="M12 2c-4.42 0-8 3.58-8 8 0 2.23.91 4.24 2.38 5.71L5 18h14l-1.38-2.29C19.09 14.24 20 12.23 20 10c0-4.42-3.58-8-8-8zm0 10c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm-4-2c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2 .9 2 2 2z"/>
+                <path fill="currentColor" d="M8 19h2v3H8zm6 0h2v3h-2z"/>
+            </svg>
+        );
+
+        const TrashIcon = () => (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                <path d="M3 6l3 18h12l3-18h-18zm19-4v2h-20v-2h5.711c.9 0 1.631-1.099 1.631-2h5.316c0 .901.73 2 1.631 2h5.711z"/>
+            </svg>
+        );
+
+        // --- ROW COMPONENT ---
         const SoulLinkRow = ({ link, isAdmin, onUpdate, onDelete }) => {
             const isDead = link.status === 'dead';
+
             return (
-                <div className={`p-3 mb-4 border-4 rounded-sm pixel-shadow relative ${isDead ? 'status-dead bg-gray-200' : 'border-indigo-900 bg-white'}`}>
-                    <div className="flex justify-between items-center mb-3">
+                <div className={`
+                    relative p-3 mb-4 border-4 rounded-sm transition-all duration-300 pixel-shadow
+                    ${isDead ? 'status-dead border-gray-600 bg-gray-200' : 'border-indigo-900 bg-white'}
+                `}>
+                    <div className="flex justify-between items-start mb-3 border-b-2 border-gray-200 pb-2">
                         <div className="w-2/3">
+                            <label className="text-[8px] text-gray-500 uppercase tracking-widest block mb-1">Zone / Route</label>
                             <input 
                                 readOnly={!isAdmin}
-                                className="w-full bg-transparent border-none font-bold text-indigo-900 uppercase focus:outline-none"
+                                type="text" 
+                                placeholder="e.g. Route 1"
                                 value={link.zone}
                                 onChange={(e) => onUpdate(link.id, { ...link, zone: e.target.value })}
-                                placeholder="Zone Name"
+                                className="font-bold text-indigo-900 uppercase focus:outline-none"
                             />
-                            {link.createdBy && (
-                                <div className="text-[6px] text-gray-400 mt-1">ID: {link.createdBy}</div>
-                            )}
                         </div>
-                        {isAdmin && (
-                            <button onClick={() => onUpdate(link.id, { ...link, status: isDead ? 'alive' : 'dead' })}
-                                    className="p-1 border-2 border-black bg-yellow-100 text-[8px] font-bold">
-                                {isDead ? "REVIVE" : "KILL"}
-                            </button>
-                        )}
+                        
+                        <button 
+                            disabled={!isAdmin}
+                            onClick={() => onUpdate(link.id, { ...link, status: isDead ? 'alive' : 'dead' })}
+                            className={`
+                                flex flex-col items-center justify-center p-2 rounded-md border-2 transition-transform active:scale-95
+                                ${isDead 
+                                    ? 'bg-gray-300 border-gray-500 text-gray-600' 
+                                    : 'bg-yellow-100 border-yellow-400 text-yellow-800 hover:bg-yellow-200'}
+                                ${!isAdmin ? 'opacity-50 cursor-default' : ''}
+                            `}
+                        >
+                            {isDead ? <SkullIcon /> : <HappyFaceIcon />}
+                            <span className="text-[8px] mt-1 font-bold">{isDead ? "DEAD" : "ALIVE"}</span>
+                        </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-red-50 p-2 border border-red-200">
-                            <label className="text-[7px] block mb-1 text-red-700 font-bold uppercase">Fire Red</label>
-                            <input readOnly={!isAdmin} className="bg-transparent w-full text-[10px]" value={link.p1} onChange={(e) => onUpdate(link.id, { ...link, p1: e.target.value })} placeholder="..." />
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-red-50 p-2 rounded border border-red-100">
+                            <div className="flex items-center gap-2 mb-1">
+                                <div className="w-3 h-3 bg-red-500 rounded-full border border-black"></div>
+                                <label className="text-[8px] font-bold text-red-800 uppercase">Fire Red</label>
+                            </div>
+                            <input 
+                                readOnly={!isAdmin}
+                                type="text" 
+                                placeholder="Pokemon..." 
+                                value={link.p1}
+                                onChange={(e) => onUpdate(link.id, { ...link, p1: e.target.value })}
+                            />
                         </div>
-                        <div className="bg-green-50 p-2 border border-green-200">
-                            <label className="text-[7px] block mb-1 text-green-700 font-bold uppercase">Leaf Green</label>
-                            <input readOnly={!isAdmin} className="bg-transparent w-full text-[10px]" value={link.p2} onChange={(e) => onUpdate(link.id, { ...link, p2: e.target.value })} placeholder="..." />
+
+                        <div className="bg-green-50 p-2 rounded border border-green-100">
+                            <div className="flex items-center gap-2 mb-1">
+                                <div className="w-3 h-3 bg-green-500 rounded-full border border-black"></div>
+                                <label className="text-[8px] font-bold text-green-800 uppercase">Leaf Green</label>
+                            </div>
+                            <input 
+                                readOnly={!isAdmin}
+                                type="text" 
+                                placeholder="Pokemon..." 
+                                value={link.p2}
+                                onChange={(e) => onUpdate(link.id, { ...link, p2: e.target.value })}
+                            />
                         </div>
                     </div>
+
                     {isAdmin && (
-                        <button onClick={() => { if(confirm("Delete?")) onDelete(link.id) }} className="absolute -top-2 -right-2 bg-red-600 text-white text-[8px] p-1 border border-black font-bold">X</button>
+                        <button 
+                            onClick={() => { if(confirm("Release this link?")) onDelete(link.id); }}
+                            className="absolute -top-3 -right-2 bg-red-600 hover:bg-red-700 text-white p-1 border-2 border-black shadow-md active:translate-y-1"
+                        >
+                            <TrashIcon />
+                        </button>
                     )}
                 </div>
             );
         };
 
+        // --- MAIN APP ---
         const App = () => {
             const [links, setLinks] = useState([]);
             const [isAdmin, setIsAdmin] = useState(false);
-            const [user, setUser] = useState(null);
             const [showLogin, setShowLogin] = useState(false);
             const [email, setEmail] = useState("");
             const [password, setPassword] = useState("");
+            const [loading, setLoading] = useState(true);
 
             useEffect(() => {
                 const q = query(collection(db, "links"), orderBy("createdAt", "desc"));
                 const unsubscribe = onSnapshot(q, (snapshot) => {
                     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     setLinks(data);
+                    setLoading(false);
                 });
-                const authUnsubscribe = onAuthStateChanged(auth, (u) => {
-                    setUser(u);
-                    setIsAdmin(!!u);
-                });
-                return () => {
-                    unsubscribe();
-                    authUnsubscribe();
-                };
+                onAuthStateChanged(auth, (u) => setIsAdmin(!!u));
+                return () => unsubscribe();
             }, []);
 
             const handleLogin = async (e) => {
@@ -143,16 +238,10 @@
             };
 
             const addLink = async () => {
-                if (!isAdmin || !user) return;
+                if (!isAdmin) return;
                 const id = Date.now().toString();
                 await setDoc(doc(db, "links", id), { 
-                    id, 
-                    zone: "NEW ROUTE", 
-                    p1: "", 
-                    p2: "", 
-                    status: "alive", 
-                    createdAt: Date.now(),
-                    createdBy: user.uid // Track who created the encounter
+                    id, zone: "", p1: "", p2: "", status: "alive", createdAt: Date.now() 
                 });
             };
 
@@ -166,39 +255,87 @@
                 await deleteDoc(doc(db, "links", id));
             };
 
+            const aliveCount = links.filter(l => l.status === 'alive').length;
+            const deadCount = links.filter(l => l.status === 'dead').length;
+
             return (
-                <div className="min-h-screen pb-24 max-w-lg mx-auto bg-[#2d1b4e] shadow-2xl border-x-4 border-[#1a1030]">
-                    <div className="bg-[#506880] p-3 border-b-8 border-[#2d1b4e] flex justify-between items-center sticky top-0 z-50 shadow-md">
-                        <h1 className="text-white text-[10px] tracking-tighter">SOUL LINK LIVE</h1>
-                        <button onClick={() => isAdmin ? signOut(auth) : setShowLogin(true)} className="text-[8px] text-white bg-black/30 p-2 border border-white/20">
-                            {isAdmin ? "LOGOUT" : "ADMIN LOGIN"}
+                <div className="min-h-screen pb-24 max-w-lg mx-auto relative bg-[#2d1b4e] shadow-2xl border-x-4 border-[#1a1030]">
+                    
+                    {/* Header */}
+                    <div className="bg-[#506880] p-3 border-b-8 border-[#2d1b4e] sticky top-0 z-40 shadow-lg flex justify-between items-center">
+                        <div className="flex flex-col">
+                            <h1 className="text-white text-[10px] tracking-widest">SOUL LINK LIVE</h1>
+                            <div className="flex gap-2 text-[8px] text-gray-300 mt-1">
+                                <span className="text-green-300">ALIVE: {aliveCount}</span>
+                                <span className="text-red-300">DEAD: {deadCount}</span>
+                            </div>
+                        </div>
+                        
+                        <button 
+                            onClick={() => isAdmin ? signOut(auth) : setShowLogin(true)}
+                            className="bg-gray-700 text-white p-2 rounded border-2 border-gray-900 text-[8px] active:scale-95 transition-transform"
+                        >
+                            {isAdmin ? "LOGOUT" : "ADMIN"}
                         </button>
                     </div>
 
+                    {/* Login Modal */}
                     {showLogin && (
                         <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
-                            <form onSubmit={handleLogin} className="bg-white p-6 border-4 border-black w-full max-w-xs">
+                            <form onSubmit={handleLogin} className="bg-white p-6 border-4 border-black w-full max-w-xs pixel-shadow">
                                 <h2 className="text-[10px] mb-4 font-bold uppercase">Admin Login</h2>
-                                <input type="text" placeholder="EMAIL" className="mb-4 block w-full p-2 border border-gray-300" onChange={e => setEmail(e.target.value)} />
-                                <input type="password" placeholder="PASSWORD" className="mb-4 block w-full p-2 border border-gray-300" onChange={e => setPassword(e.target.value)} />
-                                <button className="w-full bg-blue-600 text-white py-3 text-[10px] font-bold">SIGN IN</button>
+                                <input type="text" placeholder="EMAIL" className="mb-4" onChange={e => setEmail(e.target.value)} />
+                                <input type="password" placeholder="PASSWORD" className="mb-4" onChange={e => setPassword(e.target.value)} />
+                                <button className="w-full bg-blue-600 text-white py-3 text-[10px] font-bold border-2 border-black">SIGN IN</button>
                                 <button type="button" onClick={() => setShowLogin(false)} className="w-full mt-2 text-[8px] text-gray-400">CANCEL</button>
                             </form>
                         </div>
                     )}
 
-                    <div className="p-4 bg-[#e0f8cf] min-h-screen screen-container">
-                        <div className="absolute inset-0 pointer-events-none opacity-5" style={{backgroundImage: 'linear-gradient(rgba(0,0,0,0.2) 50%, transparent 50%)', backgroundSize: '100% 4px'}}></div>
-                        {links.length === 0 && <p className="text-center text-[8px] mt-10 text-gray-400">WAITING FOR DATA...</p>}
-                        {links.map(l => (
-                            <SoulLinkRow key={l.id} link={l} isAdmin={isAdmin} onUpdate={updateLink} onDelete={deleteLink} />
-                        ))}
+                    {/* Main List Area */}
+                    <div className="p-4 bg-[#e0f8cf] min-h-[calc(100vh-140px)] screen-container relative">
+                        <div className="absolute inset-0 pointer-events-none opacity-10" 
+                             style={{backgroundImage: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06))', backgroundSize: '100% 2px, 3px 100%'}}>
+                        </div>
+
+                        {loading ? (
+                            <p className="text-center text-[10px] py-20 opacity-40">LINKING...</p>
+                        ) : links.length === 0 ? (
+                            <div className="text-center py-20 opacity-40 select-none">
+                                <div className="text-4xl mb-4">👾</div>
+                                <p className="text-xs mb-2 uppercase">No Data</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4 pb-4">
+                                {links.map(link => (
+                                    <SoulLinkRow 
+                                        key={link.id}
+                                        link={link}
+                                        isAdmin={isAdmin}
+                                        onUpdate={updateLink}
+                                        onDelete={deleteLink}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
 
+                    {/* Admin Footer Controls */}
                     {isAdmin && (
-                        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#2d1b4e] max-w-lg mx-auto border-t-4 border-[#1a1030]">
-                            <button onClick={addLink} className="w-full bg-white py-4 text-[10px] font-bold border-2 border-black shadow-[4px_4px_0_#000] active:translate-y-1 active:shadow-none transition-all">
-                                + ADD NEW ENCOUNTER
+                        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#2d1b4e] border-t-4 border-[#1a1030] flex justify-center items-center gap-4 max-w-lg mx-auto z-40">
+                            <button 
+                                onClick={addLink}
+                                className="
+                                    w-full bg-[#f0f0f0] text-[#2d1b4e] 
+                                    font-bold py-4 px-6 
+                                    shadow-[0_4px_0_#888] active:shadow-none active:translate-y-1
+                                    rounded border-2 border-[#888]
+                                    flex items-center justify-center gap-3
+                                    transition-all hover:bg-white
+                                "
+                            >
+                                <div className="w-6 h-6 rounded-full border-2 border-black flex items-center justify-center bg-red-500 text-white leading-none pb-0.5">+</div>
+                                <span className="text-xs tracking-wider uppercase">New Encounter</span>
                             </button>
                         </div>
                     )}
