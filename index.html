@@ -98,7 +98,7 @@
             projectId: "josh-and-tom-nuzlocke",
             storageBucket: "josh-and-tom-nuzlocke.firebasestorage.app",
             messagingSenderId: "5969970030",
-            appId: "1:596955970030:web:4296388a8c62a3375eb6ff"
+            appId: "1:596955970030:web:4296388aa3375eb6ff"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -132,6 +132,37 @@
         // --- ROW COMPONENT ---
         const SoulLinkRow = ({ link, isAdmin, onUpdate, onDelete }) => {
             const isDead = link.status === 'dead';
+            const [localLink, setLocalLink] = useState(link);
+            const [isSaving, setIsSaving] = useState(false);
+            const [saveError, setSaveError] = useState(null);
+
+            // Sync local state when remote data changes
+            useEffect(() => {
+                setLocalLink(link);
+            }, [link]);
+
+            const handleSave = async () => {
+                setIsSaving(true);
+                setSaveError(null);
+                try {
+                    await onUpdate(link.id, localLink);
+                } catch (err) {
+                    setSaveError("Failed to Save!");
+                    console.error(err);
+                } finally {
+                    setIsSaving(false);
+                }
+            };
+
+            const toggleStatus = async () => {
+                if (!isAdmin) return;
+                const newStatus = isDead ? 'alive' : 'dead';
+                try {
+                    await onUpdate(link.id, { ...localLink, status: newStatus });
+                } catch (err) {
+                    alert("Status change failed. Check permissions.");
+                }
+            };
 
             return (
                 <div className={`
@@ -145,15 +176,15 @@
                                 readOnly={!isAdmin}
                                 type="text" 
                                 placeholder="e.g. Route 1"
-                                value={link.zone}
-                                onChange={(e) => onUpdate(link.id, { ...link, zone: e.target.value })}
+                                value={localLink.zone}
+                                onChange={(e) => setLocalLink({...localLink, zone: e.target.value})}
                                 className="font-bold text-indigo-900 uppercase focus:outline-none"
                             />
                         </div>
                         
                         <button 
                             disabled={!isAdmin}
-                            onClick={() => onUpdate(link.id, { ...link, status: isDead ? 'alive' : 'dead' })}
+                            onClick={toggleStatus}
                             className={`
                                 flex flex-col items-center justify-center p-2 rounded-md border-2 transition-transform active:scale-95
                                 ${isDead 
@@ -167,7 +198,7 @@
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4 mb-2">
                         <div className="bg-red-50 p-2 rounded border border-red-100">
                             <div className="flex items-center gap-2 mb-1">
                                 <div className="w-3 h-3 bg-red-500 rounded-full border border-black"></div>
@@ -177,8 +208,8 @@
                                 readOnly={!isAdmin}
                                 type="text" 
                                 placeholder="Pokemon..." 
-                                value={link.p1}
-                                onChange={(e) => onUpdate(link.id, { ...link, p1: e.target.value })}
+                                value={localLink.p1}
+                                onChange={(e) => setLocalLink({...localLink, p1: e.target.value})}
                             />
                         </div>
 
@@ -191,19 +222,33 @@
                                 readOnly={!isAdmin}
                                 type="text" 
                                 placeholder="Pokemon..." 
-                                value={link.p2}
-                                onChange={(e) => onUpdate(link.id, { ...link, p2: e.target.value })}
+                                value={localLink.p2}
+                                onChange={(e) => setLocalLink({...localLink, p2: e.target.value})}
                             />
                         </div>
                     </div>
 
                     {isAdmin && (
-                        <button 
-                            onClick={() => { if(confirm("Release this link?")) onDelete(link.id); }}
-                            className="absolute -top-3 -right-2 bg-red-600 hover:bg-red-700 text-white p-1 border-2 border-black shadow-md active:translate-y-1"
-                        >
-                            <TrashIcon />
-                        </button>
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                            <button 
+                                onClick={handleSave}
+                                disabled={isSaving}
+                                className={`text-[8px] font-bold py-1 px-3 border-2 border-black rounded shadow-[2px_2px_0_#000] active:translate-y-1 active:shadow-none transition-all
+                                    ${saveError ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'}
+                                `}
+                            >
+                                {isSaving ? "SAVING..." : saveError ? "RETRY SAVE" : "SAVE LINK"}
+                            </button>
+                            
+                            {saveError && <span className="text-[7px] text-red-600 font-bold">{saveError}</span>}
+
+                            <button 
+                                onClick={() => { if(confirm("Release this link?")) onDelete(link.id); }}
+                                className="bg-red-600 hover:bg-red-700 text-white p-1 border-2 border-black shadow-md active:translate-y-1"
+                            >
+                                <TrashIcon />
+                            </button>
+                        </div>
                     )}
                 </div>
             );
@@ -217,15 +262,24 @@
             const [email, setEmail] = useState("");
             const [password, setPassword] = useState("");
             const [loading, setLoading] = useState(true);
+            const [globalError, setGlobalError] = useState(null);
 
             useEffect(() => {
                 const q = query(collection(db, "links"), orderBy("createdAt", "desc"));
+                
                 const unsubscribe = onSnapshot(q, (snapshot) => {
                     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     setLinks(data);
                     setLoading(false);
+                    setGlobalError(null);
+                }, (error) => {
+                    console.error("Firestore Error:", error);
+                    setGlobalError("Connection Error: Data may be outdated.");
+                    setLoading(false);
                 });
+
                 onAuthStateChanged(auth, (u) => setIsAdmin(!!u));
+                
                 return () => unsubscribe();
             }, []);
 
@@ -240,19 +294,30 @@
             const addLink = async () => {
                 if (!isAdmin) return;
                 const id = Date.now().toString();
-                await setDoc(doc(db, "links", id), { 
-                    id, zone: "", p1: "", p2: "", status: "alive", createdAt: Date.now() 
-                });
+                try {
+                    await setDoc(doc(db, "links", id), { 
+                        id, zone: "", p1: "", p2: "", status: "alive", createdAt: Date.now() 
+                    });
+                } catch (e) { 
+                    alert("Permission Denied: Could not create row.");
+                    console.error(e); 
+                }
             };
 
             const updateLink = async (id, data) => {
                 if (!isAdmin) return;
-                await setDoc(doc(db, "links", id), data, { merge: true });
+                // Return promise for component to handle error
+                return setDoc(doc(db, "links", id), data, { merge: true });
             };
 
             const deleteLink = async (id) => {
                 if (!isAdmin) return;
-                await deleteDoc(doc(db, "links", id));
+                try {
+                    await deleteDoc(doc(db, "links", id));
+                } catch (e) { 
+                    alert("Permission Denied: Could not delete row.");
+                    console.error(e); 
+                }
             };
 
             const aliveCount = links.filter(l => l.status === 'alive').length;
@@ -264,7 +329,7 @@
                     {/* Header */}
                     <div className="bg-[#506880] p-3 border-b-8 border-[#2d1b4e] sticky top-0 z-40 shadow-lg flex justify-between items-center">
                         <div className="flex flex-col">
-                            <h1 className="text-white text-[10px] tracking-widest">SOUL LINK LIVE</h1>
+                            <h1 className="text-white text-[10px] tracking-widest uppercase">Soul Link Live</h1>
                             <div className="flex gap-2 text-[8px] text-gray-300 mt-1">
                                 <span className="text-green-300">ALIVE: {aliveCount}</span>
                                 <span className="text-red-300">DEAD: {deadCount}</span>
@@ -279,6 +344,13 @@
                         </button>
                     </div>
 
+                    {/* Global Error Message */}
+                    {globalError && (
+                        <div className="bg-red-600 text-white text-[7px] p-2 text-center sticky top-16 z-30 font-bold border-b-2 border-black">
+                            {globalError}
+                        </div>
+                    )}
+
                     {/* Login Modal */}
                     {showLogin && (
                         <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
@@ -286,8 +358,8 @@
                                 <h2 className="text-[10px] mb-4 font-bold uppercase">Admin Login</h2>
                                 <input type="text" placeholder="EMAIL" className="mb-4" onChange={e => setEmail(e.target.value)} />
                                 <input type="password" placeholder="PASSWORD" className="mb-4" onChange={e => setPassword(e.target.value)} />
-                                <button className="w-full bg-blue-600 text-white py-3 text-[10px] font-bold border-2 border-black">SIGN IN</button>
-                                <button type="button" onClick={() => setShowLogin(false)} className="w-full mt-2 text-[8px] text-gray-400">CANCEL</button>
+                                <button className="w-full bg-blue-600 text-white py-3 text-[10px] font-bold border-2 border-black shadow-[4px_4px_0_#000] active:translate-y-1">SIGN IN</button>
+                                <button type="button" onClick={() => setShowLogin(false)} className="w-full mt-4 text-[8px] text-gray-400">CANCEL</button>
                             </form>
                         </div>
                     )}
@@ -299,11 +371,11 @@
                         </div>
 
                         {loading ? (
-                            <p className="text-center text-[10px] py-20 opacity-40">LINKING...</p>
+                            <p className="text-center text-[10px] py-20 opacity-40">CONNECTING TO PC...</p>
                         ) : links.length === 0 ? (
                             <div className="text-center py-20 opacity-40 select-none">
                                 <div className="text-4xl mb-4">👾</div>
-                                <p className="text-xs mb-2 uppercase">No Data</p>
+                                <p className="text-xs mb-2 uppercase">No Data Found</p>
                             </div>
                         ) : (
                             <div className="space-y-4 pb-4">
