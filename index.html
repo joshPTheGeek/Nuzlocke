@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Soul Link Nuzlocke: Live Sync</title>
-    <!-- React & Tailwind -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -17,7 +16,6 @@
             --gba-screen-bg: #e0f8cf;
             --pkmn-red: #cc0000;
             --pkmn-blue: #3b4cca;
-            --pkmn-ui-blue: #3050c0;
         }
 
         body {
@@ -31,33 +29,32 @@
             background-size: 40px 40px;
             color: #333;
             overflow-x: hidden;
-            touch-action: manipulation;
         }
 
         input[type="text"], input[type="password"] {
             font-family: 'Press Start 2P', cursive;
             font-size: 0.65rem;
             outline: none;
-            background: rgba(255,255,255,0.5);
-            border: 2px solid transparent;
-            border-bottom: 2px solid #a0a0a0;
-            padding: 6px;
+            background: rgba(255,255,255,0.7);
+            border: 2px solid #a0a0a0;
+            padding: 8px;
             width: 100%;
             border-radius: 4px;
         }
 
         .status-dead {
-            filter: grayscale(100%) contrast(1.1);
+            filter: grayscale(100%) contrast(0.8);
             opacity: 0.8;
-            background-color: #dcdcdc !important;
-            border-color: #555 !important;
+            background-color: #d1d1d1 !important;
+            border-color: #666 !important;
         }
-        .status-dead input { text-decoration: line-through; color: #555; }
+        
+        .status-dead input { text-decoration: line-through; color: #777; }
 
         @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
         .animate-happy { animation: bounce 2s infinite; }
-        .pixel-shadow { box-shadow: 4px 4px 0 rgba(0,0,0,0.3); }
-        .screen-container { box-shadow: inset 0 0 20px rgba(0,0,0,0.2); position: relative; }
+        .pixel-shadow { box-shadow: 4px 4px 0 rgba(0,0,0,0.4); }
+        .screen-container { position: relative; overflow-y: auto; }
 
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .notification-banner { animation: slideUp 0.3s ease-out; }
@@ -66,67 +63,42 @@
 <body>
     <div id="root"></div>
 
-    <!-- ENGINE BLOCK: Handles Firebase Imports -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { getFirestore, doc, onSnapshot, setDoc, collection, query, orderBy, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getFirestore, doc, onSnapshot, setDoc, collection, query, orderBy, deleteDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
+        // IMPORTANT: Ensure these match your project settings exactly
         const firebaseConfig = {
             apiKey: "AIzaSyCX6il-7t1C_mFOQq8KEL_NuOIYOGKpgws",
             authDomain: "josh-and-tom-nuzlocke.firebaseapp.com",
             projectId: "josh-and-tom-nuzlocke",
             storageBucket: "josh-and-tom-nuzlocke.firebasestorage.app",
-            messagingSenderId: "5969970030",
-            appId: "1:596955970030:web:4296388aa3375eb6ff"
+            messagingSenderId: "596955970030",
+            appId: "1:596955970030:web:4296388a8c62a3375eb6ff"
         };
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // Attach to window so the React block can see them
         window.db = db;
         window.auth = auth;
         window.fb = { collection, doc, onSnapshot, setDoc, query, orderBy, deleteDoc, signInWithEmailAndPassword, onAuthStateChanged, signOut };
-
-        // Debug Tool
-        window.testConnection = async () => {
-            console.log("Testing Connection...");
-            try {
-                const testRef = doc(db, "debug", "connection_test");
-                await setDoc(testRef, { last_test: Date.now() });
-                console.log("%c CONNECTION SUCCESSFUL", "background: green; color: white; padding: 5px;");
-                return true;
-            } catch (e) {
-                console.error("%c CONNECTION FAILED: " + e.code, "background: red; color: white; padding: 5px;");
-                return e.code;
-            }
-        };
     </script>
 
-    <!-- UI BLOCK: Handles React & Visuals -->
     <script type="text/babel">
         const { useState, useEffect } = React;
 
         const HappyFaceIcon = () => (
-            <svg width="24" height="24" viewBox="0 0 24 24" className="text-yellow-500 animate-happy filter drop-shadow-sm">
+            <svg width="24" height="24" viewBox="0 0 24 24" className="text-yellow-500 animate-happy">
                 <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-9h2v2H7zm8 0h2v2h-2zm-4 4c-2.33 0-4.31 1.46-5.11 3.5h10.22c-.8-2.04-2.78-3.5-5.11-3.5z"/>
-                <circle cx="5.5" cy="13.5" r="1.5" fill="#ff4444" opacity="0.6" />
-                <circle cx="18.5" cy="13.5" r="1.5" fill="#ff4444" opacity="0.6" />
             </svg>
         );
 
         const SkullIcon = () => (
             <svg width="24" height="24" viewBox="0 0 24 24" className="text-gray-700">
                 <path fill="currentColor" d="M12 2c-4.42 0-8 3.58-8 8 0 2.23.91 4.24 2.38 5.71L5 18h14l-1.38-2.29C19.09 14.24 20 12.23 20 10c0-4.42-3.58-8-8-8zm0 10c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm-4-2c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2 .9 2 2 2z"/>
-                <path fill="currentColor" d="M8 19h2v3H8zm6 0h2v3h-2z"/>
-            </svg>
-        );
-
-        const TrashIcon = () => (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                <path d="M3 6l3 18h12l3-18h-18zm19-4v2h-20v-2h5.711c.9 0 1.631-1.099 1.631-2h5.316c0 .901.73 2 1.631 2h5.711z"/>
             </svg>
         );
 
@@ -134,65 +106,74 @@
             const isDead = link.status === 'dead';
             const [localLink, setLocalLink] = useState(link);
             const [isSaving, setIsSaving] = useState(false);
-            const [saveError, setSaveError] = useState(null);
 
             useEffect(() => { setLocalLink(link); }, [link]);
 
-            const handleSave = async () => {
+            const handleUpdate = async (updates) => {
+                if (!isAdmin) return;
                 setIsSaving(true);
-                setSaveError(null);
-                
-                const timeout = setTimeout(() => {
-                    if (isSaving) {
-                        setSaveError("TIMEOUT");
-                        setIsSaving(false);
-                        addNotification("Save Timed Out", "error");
-                    }
-                }, 7000);
-
                 try {
-                    await onUpdate(link.id, localLink);
-                    clearTimeout(timeout);
-                    addNotification("SAVED!", "success");
-                    setIsSaving(false);
-                } catch (err) {
-                    clearTimeout(timeout);
-                    setSaveError(err.code || "ERR");
-                    addNotification(`FAILED: ${err.code}`, "error");
+                    await onUpdate(link.id, { ...localLink, ...updates });
+                    addNotification("SYNCED", "success");
+                } catch (e) {
+                    addNotification("ERROR: " + e.code, "error");
+                } finally {
                     setIsSaving(false);
                 }
             };
 
             return (
-                <div className={`relative p-3 mb-4 border-4 rounded-sm pixel-shadow ${isDead ? 'status-dead border-gray-600 bg-gray-200' : 'border-indigo-900 bg-white'}`}>
-                    <div className="flex justify-between items-start mb-3 border-b-2 border-gray-200 pb-2">
-                        <div className="w-2/3">
-                            <label className="text-[8px] text-gray-500 block mb-1">Zone / Route</label>
-                            <input readOnly={!isAdmin} className="font-bold text-indigo-900 uppercase focus:outline-none" value={localLink.zone} onChange={e => setLocalLink({...localLink, zone: e.target.value})} />
+                <div className={`relative p-3 mb-4 border-4 rounded-sm pixel-shadow transition-all ${isDead ? 'status-dead border-gray-600 bg-gray-200' : 'border-indigo-900 bg-white'}`}>
+                    <div className="flex justify-between items-center mb-3 border-b-2 border-gray-200 pb-2">
+                        <div className="flex-1 mr-4">
+                            <label className="text-[7px] text-gray-500 block mb-1">LOCATION / ROUTE</label>
+                            <input 
+                                readOnly={!isAdmin} 
+                                className="font-bold text-indigo-900 uppercase bg-transparent w-full" 
+                                value={localLink.zone} 
+                                onChange={e => setLocalLink({...localLink, zone: e.target.value})}
+                                onBlur={() => handleUpdate({})} 
+                            />
                         </div>
-                        <button disabled={!isAdmin} onClick={() => onUpdate(link.id, {...link, status: isDead ? 'alive' : 'dead'})} className={`flex flex-col items-center p-2 rounded border-2 ${isDead ? 'bg-gray-300' : 'bg-yellow-100 border-yellow-400'}`}>
+                        <button 
+                            disabled={!isAdmin || isSaving}
+                            onClick={() => handleUpdate({ status: isDead ? 'alive' : 'dead' })} 
+                            className={`flex flex-col items-center p-2 rounded border-2 ${isDead ? 'bg-gray-300 border-gray-400' : 'bg-yellow-50 border-yellow-400'}`}
+                        >
                             {isDead ? <SkullIcon /> : <HappyFaceIcon />}
-                            <span className="text-[8px] mt-1 font-bold">{isDead ? "DEAD" : "ALIVE"}</span>
+                            <span className="text-[6px] mt-1 font-bold">{isDead ? "RIP" : "LIVE"}</span>
                         </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 mb-2">
-                        <div className="bg-red-50 p-2 border border-red-100">
-                            <label className="text-[7px] font-bold text-red-800 block mb-1 uppercase tracking-tighter">Fire Red</label>
-                            <input readOnly={!isAdmin} className="bg-transparent w-full text-[10px] focus:outline-none" value={localLink.p1} onChange={e => setLocalLink({...localLink, p1: e.target.value})} />
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-red-50 p-2 border border-red-200">
+                            <label className="text-[6px] font-bold text-red-800 block mb-1">FIRE RED</label>
+                            <input 
+                                readOnly={!isAdmin} 
+                                className="bg-transparent w-full text-[10px] focus:underline" 
+                                value={localLink.p1} 
+                                onChange={e => setLocalLink({...localLink, p1: e.target.value})}
+                                onBlur={() => handleUpdate({})}
+                            />
                         </div>
-                        <div className="bg-green-50 p-2 border border-green-100">
-                            <label className="text-[7px] font-bold text-green-800 block mb-1 uppercase tracking-tighter">Leaf Green</label>
-                            <input readOnly={!isAdmin} className="bg-transparent w-full text-[10px] focus:outline-none" value={localLink.p2} onChange={e => setLocalLink({...localLink, p2: e.target.value})} />
+                        <div className="bg-green-50 p-2 border border-green-200">
+                            <label className="text-[6px] font-bold text-green-800 block mb-1">LEAF GREEN</label>
+                            <input 
+                                readOnly={!isAdmin} 
+                                className="bg-transparent w-full text-[10px] focus:underline" 
+                                value={localLink.p2} 
+                                onChange={e => setLocalLink({...localLink, p2: e.target.value})}
+                                onBlur={() => handleUpdate({})}
+                            />
                         </div>
                     </div>
+
                     {isAdmin && (
-                        <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
-                            <div className="flex items-center gap-2">
-                                <button onClick={handleSave} disabled={isSaving} className={`text-[8px] font-bold py-1 px-3 border-2 border-black rounded shadow-[2px_2px_0_#000] active:translate-y-1 active:shadow-none transition-all ${saveError ? 'bg-red-500' : 'bg-blue-500'} text-white`}>
-                                    {isSaving ? "SAVING..." : saveError ? `RETRY (${saveError})` : "SAVE LINK"}
-                                </button>
-                            </div>
-                            <button onClick={() => confirm("Release?") && onDelete(link.id)} className="bg-red-600 p-1 border-2 border-black shadow-md"><TrashIcon /></button>
+                        <div className="flex justify-end mt-2">
+                            <button 
+                                onClick={() => confirm("Release this link?") && onDelete(link.id)} 
+                                className="bg-red-500 text-white p-1 text-[8px] border border-black"
+                            >DELETE</button>
                         </div>
                     )}
                 </div>
@@ -206,13 +187,12 @@
             const [email, setEmail] = useState("");
             const [password, setPassword] = useState("");
             const [notifications, setNotifications] = useState([]);
-            const [lastError, setLastError] = useState(null);
             const [connStatus, setConnStatus] = useState("INITIALIZING");
 
             const addNotification = (message, type) => {
                 const id = Date.now();
                 setNotifications(prev => [...prev, { id, message, type }]);
-                setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 3000);
+                setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 2500);
             };
 
             useEffect(() => {
@@ -220,77 +200,83 @@
                     if (window.db && window.fb) {
                         clearInterval(checkFB);
                         setConnStatus("CONNECTING...");
-                        try {
-                            const q = window.fb.query(window.fb.collection(window.db, "links"), window.fb.orderBy("createdAt", "desc"));
-                            const unsub = window.fb.onSnapshot(q, (snapshot) => {
-                                setLinks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                                setConnStatus("ONLINE");
-                                setLastError(null);
-                            }, (err) => {
-                                setConnStatus("ERROR");
-                                setLastError(`Stream Error: ${err.code}`);
-                                console.error("Firebase Snapshot Error:", err);
-                            });
-                            window.fb.onAuthStateChanged(window.auth, (u) => setIsAdmin(!!u));
-                        } catch (e) { 
+                        
+                        const q = window.fb.query(window.fb.collection(window.db, "links"), window.fb.orderBy("createdAt", "desc"));
+                        const unsub = window.fb.onSnapshot(q, (snapshot) => {
+                            setLinks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                            setConnStatus("ONLINE");
+                        }, (err) => {
                             setConnStatus("ERROR");
-                            setLastError(`Init Error: ${e.message}`); 
-                        }
-                    }
-                }, 200);
-            }, []);
+                            console.error(err);
+                        });
 
-            const runTest = async () => {
-                if (!isAdmin) {
-                    addNotification("Admin Login Required for Test", "error");
-                    return;
-                }
-                const result = await window.testConnection();
-                if (result === true) addNotification("Database Write Success!", "success");
-                else addNotification(`Write Failed: ${result}`, "error");
-            };
+                        window.fb.onAuthStateChanged(window.auth, (user) => setIsAdmin(!!user));
+                    }
+                }, 500);
+            }, []);
 
             const handleLogin = async (e) => {
                 e.preventDefault();
                 try {
                     await window.fb.signInWithEmailAndPassword(window.auth, email, password);
                     setShowLogin(false);
-                    addNotification("LOGGED IN", "success");
-                } catch (err) { addNotification(err.code || "FAILED", "error"); }
+                    addNotification("WELCOME BACK", "success");
+                } catch (err) { addNotification("LOGIN FAILED", "error"); }
             };
 
-            const addLink = () => {
+            const addNewLink = async () => {
+                if (!isAdmin) return;
                 const id = Date.now().toString();
-                window.fb.setDoc(window.fb.doc(window.db, "links", id), { id, zone: "", p1: "", p2: "", status: "alive", createdAt: Date.now() })
-                    .catch(e => {
-                        setLastError(`Add Fail: ${e.code}`);
-                        addNotification(`Add Failed: ${e.code}`, "error");
+                try {
+                    await window.fb.setDoc(window.fb.doc(window.db, "links", id), {
+                        id, zone: "NEW ROUTE", p1: "???", p2: "???", status: "alive", createdAt: Date.now()
                     });
+                    addNotification("LINK CREATED", "success");
+                } catch (e) { addNotification("DB ERROR", "error"); }
             };
 
             return (
-                <div className="min-h-screen pb-24 max-w-lg mx-auto bg-[#2d1b4e] border-x-4 border-[#1a1030] relative">
-                    
-                    {/* Status Monitor (Top bar) */}
-                    <div className={`text-[6px] p-1 text-center font-bold absolute top-0 left-0 right-0 z-[100] border-b border-black text-white ${connStatus === 'ONLINE' ? 'bg-green-600' : connStatus === 'ERROR' ? 'bg-red-600' : 'bg-orange-500'}`}>
-                        DATABASE: {connStatus} {lastError ? `| ERROR: ${lastError}` : ''}
+                <div className="min-h-screen pb-24 max-w-lg mx-auto bg-[#2d1b4e] border-x-4 border-[#1a1030] shadow-2xl relative">
+                    {/* Status Bar */}
+                    <div className={`text-[6px] p-1 text-center font-bold sticky top-0 z-[100] text-white ${connStatus === 'ONLINE' ? 'bg-green-600' : 'bg-red-600'}`}>
+                        DATABASE: {connStatus} {isAdmin ? "(ADMIN MODE)" : "(VIEW ONLY)"}
                     </div>
 
-                    <div className="bg-[#506880] p-3 pt-6 border-b-8 border-[#2d1b4e] sticky top-0 z-50 flex justify-between items-center shadow-lg">
-                        <h1 className="text-white text-[10px] tracking-widest uppercase">Soul Link Live</h1>
-                        <div className="flex gap-2">
-                            {isAdmin && (
-                                <button onClick={runTest} className="bg-blue-600 text-white p-2 border-2 border-blue-900 text-[6px]">TEST</button>
-                            )}
-                            <button onClick={() => isAdmin ? window.fb.signOut(window.auth) : setShowLogin(true)} className="bg-gray-700 text-white p-2 border-2 border-gray-900 text-[8px] active:scale-95">
-                                {isAdmin ? "LOGOUT" : "ADMIN"}
+                    <div className="bg-[#506880] p-4 flex justify-between items-center border-b-4 border-[#1a1030]">
+                        <h1 className="text-white text-[10px]">SOUL LINK SYNC</h1>
+                        <button onClick={() => isAdmin ? window.fb.signOut(window.auth) : setShowLogin(true)} className="bg-gray-800 text-white p-2 border-2 border-black text-[8px]">
+                            {isAdmin ? "EXIT" : "LOGIN"}
+                        </button>
+                    </div>
+
+                    <div className="p-4 bg-[#e0f8cf] min-h-[80vh] screen-container">
+                        {links.length === 0 && connStatus === "ONLINE" && (
+                            <div className="text-center py-20 opacity-30 text-[8px]">NO LINKS FOUND</div>
+                        )}
+                        {links.map(l => (
+                            <SoulLinkRow 
+                                key={l.id} 
+                                link={l} 
+                                isAdmin={isAdmin} 
+                                addNotification={addNotification}
+                                onUpdate={(id, data) => window.fb.setDoc(window.fb.doc(window.db, "links", id), data, {merge: true})}
+                                onDelete={id => window.fb.deleteDoc(window.fb.doc(window.db, "links", id))}
+                            />
+                        ))}
+                    </div>
+
+                    {isAdmin && (
+                        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#2d1b4e] border-t-4 border-[#1a1030] max-w-lg mx-auto z-40">
+                            <button onClick={addNewLink} className="w-full bg-white text-indigo-900 font-bold py-4 border-2 border-black pixel-shadow active:translate-y-1 active:shadow-none text-[10px]">
+                                + ADD NEW ENCOUNTER
                             </button>
                         </div>
-                    </div>
+                    )}
 
+                    {/* Notifications */}
                     <div className="fixed bottom-24 left-1/2 -translate-x-1/2 w-full max-w-xs z-[60] flex flex-col gap-2 p-4">
                         {notifications.map(n => (
-                            <div key={n.id} className={`notification-banner p-3 border-2 border-black pixel-shadow text-[8px] font-bold text-center ${n.type === 'success' ? 'bg-green-400' : 'bg-red-400'}`}>
+                            <div key={n.id} className={`p-3 border-2 border-black pixel-shadow text-[8px] font-bold text-center ${n.type === 'success' ? 'bg-green-400' : 'bg-red-400'}`}>
                                 {n.message}
                             </div>
                         ))}
@@ -299,40 +285,12 @@
                     {showLogin && (
                         <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
                             <form onSubmit={handleLogin} className="bg-white p-6 border-4 border-black w-full max-w-xs pixel-shadow">
-                                <h2 className="text-[10px] mb-4 font-bold uppercase">Login</h2>
+                                <h2 className="text-[10px] mb-4 font-bold uppercase">Admin Access</h2>
                                 <input type="text" placeholder="EMAIL" className="mb-4" onChange={e => setEmail(e.target.value)} />
                                 <input type="password" placeholder="PASSWORD" className="mb-4" onChange={e => setPassword(e.target.value)} />
-                                <button className="w-full bg-blue-600 text-white py-3 text-[10px] font-bold border-2 border-black">SIGN IN</button>
-                                <button type="button" onClick={() => setShowLogin(false)} className="w-full mt-4 text-[8px] text-gray-400 underline text-center block">CANCEL</button>
+                                <button className="w-full bg-blue-600 text-white py-3 text-[10px] font-bold border-2 border-black">LOG IN</button>
+                                <button type="button" onClick={() => setShowLogin(false)} className="w-full mt-4 text-[8px] text-gray-400 underline">CANCEL</button>
                             </form>
-                        </div>
-                    )}
-
-                    <div className="p-4 bg-[#e0f8cf] min-h-[calc(100vh-140px)] screen-container">
-                        <div className="absolute inset-0 pointer-events-none opacity-10" style={{backgroundImage: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06))', backgroundSize: '100% 2px, 3px 100%'}}></div>
-                        
-                        {connStatus === "CONNECTING..." && <p className="text-center text-[8px] py-10">SEARCHING FOR DATABASE...</p>}
-                        
-                        {links.length === 0 && connStatus === "ONLINE" ? (
-                            <div className="text-center py-20 opacity-40 uppercase">
-                                <p className="text-[10px] mb-2">Cartridge Empty</p>
-                                <p className="text-[6px]">Click 'New Encounter' to start</p>
-                            </div>
-                        ) : links.map(l => (
-                            <SoulLinkRow 
-                                key={l.id} 
-                                link={l} 
-                                isAdmin={isAdmin} 
-                                addNotification={addNotification} 
-                                onUpdate={(id, data) => window.fb.setDoc(window.fb.doc(window.db, "links", id), data, {merge:true})} 
-                                onDelete={id => window.fb.deleteDoc(window.fb.doc(window.db, "links", id))} 
-                            />
-                        ))}
-                    </div>
-
-                    {isAdmin && (
-                        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#2d1b4e] border-t-4 border-[#1a1030] max-w-lg mx-auto z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
-                            <button onClick={addLink} className="w-full bg-[#f0f0f0] text-[#2d1b4e] font-bold py-4 rounded border-2 border-[#888] shadow-[0_4px_0_#888] active:translate-y-1 active:shadow-none text-[10px] tracking-tighter uppercase transition-all">+ New Encounter</button>
                         </div>
                     )}
                 </div>
