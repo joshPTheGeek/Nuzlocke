@@ -44,11 +44,6 @@
             padding: 6px;
             width: 100%;
             border-radius: 4px;
-            transition: all 0.2s;
-        }
-        input[type="text"]:focus {
-            background: white;
-            border-bottom-color: var(--pkmn-ui-blue);
         }
 
         .status-dead {
@@ -57,57 +52,46 @@
             background-color: #dcdcdc !important;
             border-color: #555 !important;
         }
-        .status-dead input {
-            text-decoration: line-through;
-            color: #555;
-        }
+        .status-dead input { text-decoration: line-through; color: #555; }
 
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-3px); }
-        }
-        .animate-happy {
-            animation: bounce 2s infinite;
-        }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+        .animate-happy { animation: bounce 2s infinite; }
+        .pixel-shadow { box-shadow: 4px 4px 0 rgba(0,0,0,0.3); }
+        .screen-container { box-shadow: inset 0 0 20px rgba(0,0,0,0.2); position: relative; }
 
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #2d1b4e; }
-        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
-
-        .screen-container {
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
-        }
-        
-        .pixel-shadow {
-            box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
-        }
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .notification-banner { animation: slideUp 0.3s ease-out; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module">
+    <!-- ENGINE BLOCK: Handles Firebase Imports -->
+    <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
         import { getFirestore, doc, onSnapshot, setDoc, collection, query, orderBy, deleteDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
-        // --- FIREBASE CONFIG ---
         const firebaseConfig = {
             apiKey: "AIzaSyCX6il-7t1C_mFOQq8KEL_NuOIYOGKpgws",
             authDomain: "josh-and-tom-nuzlocke.firebaseapp.com",
             projectId: "josh-and-tom-nuzlocke",
             storageBucket: "josh-and-tom-nuzlocke.firebasestorage.app",
-            messagingSenderId: "5969970030",
-            appId: "1:596955970030:web:4296388aa3375eb6ff"
+            messagingSenderId: "596955970030",
+            appId: "1:596955970030:web:4296388a8c62a3375eb6ff"
         };
 
+        // Attach to window so the React block can see them
         const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
+        window.db = getFirestore(app);
+        window.auth = getAuth(app);
+        window.fb = { collection, doc, onSnapshot, setDoc, query, orderBy, deleteDoc, signInWithEmailAndPassword, onAuthStateChanged, signOut };
+    </script>
 
+    <!-- UI BLOCK: Handles React & Visuals -->
+    <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- ICONS ---
         const HappyFaceIcon = () => (
             <svg width="24" height="24" viewBox="0 0 24 24" className="text-yellow-500 animate-happy filter drop-shadow-sm">
                 <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-9h2v2H7zm8 0h2v2h-2zm-4 4c-2.33 0-4.31 1.46-5.11 3.5h10.22c-.8-2.04-2.78-3.5-5.11-3.5z"/>
@@ -129,286 +113,136 @@
             </svg>
         );
 
-        // --- ROW COMPONENT ---
-        const SoulLinkRow = ({ link, isAdmin, onUpdate, onDelete }) => {
+        const SoulLinkRow = ({ link, isAdmin, onUpdate, onDelete, addNotification }) => {
             const isDead = link.status === 'dead';
             const [localLink, setLocalLink] = useState(link);
             const [isSaving, setIsSaving] = useState(false);
-            const [saveError, setSaveError] = useState(null);
 
-            // Sync local state when remote data changes
-            useEffect(() => {
-                setLocalLink(link);
-            }, [link]);
+            useEffect(() => { setLocalLink(link); }, [link]);
 
             const handleSave = async () => {
                 setIsSaving(true);
-                setSaveError(null);
                 try {
                     await onUpdate(link.id, localLink);
+                    addNotification("Link Saved!", "success");
                 } catch (err) {
-                    setSaveError("Failed to Save!");
-                    console.error(err);
-                } finally {
-                    setIsSaving(false);
-                }
-            };
-
-            const toggleStatus = async () => {
-                if (!isAdmin) return;
-                const newStatus = isDead ? 'alive' : 'dead';
-                try {
-                    await onUpdate(link.id, { ...localLink, status: newStatus });
-                } catch (err) {
-                    alert("Status change failed. Check permissions.");
-                }
+                    addNotification("Save Failed!", "error");
+                } finally { setIsSaving(false); }
             };
 
             return (
-                <div className={`
-                    relative p-3 mb-4 border-4 rounded-sm transition-all duration-300 pixel-shadow
-                    ${isDead ? 'status-dead border-gray-600 bg-gray-200' : 'border-indigo-900 bg-white'}
-                `}>
+                <div className={`relative p-3 mb-4 border-4 rounded-sm pixel-shadow ${isDead ? 'status-dead border-gray-600 bg-gray-200' : 'border-indigo-900 bg-white'}`}>
                     <div className="flex justify-between items-start mb-3 border-b-2 border-gray-200 pb-2">
                         <div className="w-2/3">
-                            <label className="text-[8px] text-gray-500 uppercase tracking-widest block mb-1">Zone / Route</label>
-                            <input 
-                                readOnly={!isAdmin}
-                                type="text" 
-                                placeholder="e.g. Route 1"
-                                value={localLink.zone}
-                                onChange={(e) => setLocalLink({...localLink, zone: e.target.value})}
-                                className="font-bold text-indigo-900 uppercase focus:outline-none"
-                            />
+                            <label className="text-[8px] text-gray-500 block mb-1">Zone / Route</label>
+                            <input readOnly={!isAdmin} className="font-bold text-indigo-900 uppercase" value={localLink.zone} onChange={e => setLocalLink({...localLink, zone: e.target.value})} />
                         </div>
-                        
-                        <button 
-                            disabled={!isAdmin}
-                            onClick={toggleStatus}
-                            className={`
-                                flex flex-col items-center justify-center p-2 rounded-md border-2 transition-transform active:scale-95
-                                ${isDead 
-                                    ? 'bg-gray-300 border-gray-500 text-gray-600' 
-                                    : 'bg-yellow-100 border-yellow-400 text-yellow-800 hover:bg-yellow-200'}
-                                ${!isAdmin ? 'opacity-50 cursor-default' : ''}
-                            `}
-                        >
+                        <button disabled={!isAdmin} onClick={() => onUpdate(link.id, {...link, status: isDead ? 'alive' : 'dead'})} className={`flex flex-col items-center p-2 rounded border-2 ${isDead ? 'bg-gray-300' : 'bg-yellow-100 border-yellow-400'}`}>
                             {isDead ? <SkullIcon /> : <HappyFaceIcon />}
                             <span className="text-[8px] mt-1 font-bold">{isDead ? "DEAD" : "ALIVE"}</span>
                         </button>
                     </div>
-
                     <div className="grid grid-cols-2 gap-4 mb-2">
-                        <div className="bg-red-50 p-2 rounded border border-red-100">
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="w-3 h-3 bg-red-500 rounded-full border border-black"></div>
-                                <label className="text-[8px] font-bold text-red-800 uppercase">Fire Red</label>
-                            </div>
-                            <input 
-                                readOnly={!isAdmin}
-                                type="text" 
-                                placeholder="Pokemon..." 
-                                value={localLink.p1}
-                                onChange={(e) => setLocalLink({...localLink, p1: e.target.value})}
-                            />
+                        <div className="bg-red-50 p-2 border border-red-100">
+                            <label className="text-[7px] font-bold text-red-800 block mb-1 uppercase">Fire Red</label>
+                            <input readOnly={!isAdmin} value={localLink.p1} onChange={e => setLocalLink({...localLink, p1: e.target.value})} />
                         </div>
-
-                        <div className="bg-green-50 p-2 rounded border border-green-100">
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="w-3 h-3 bg-green-500 rounded-full border border-black"></div>
-                                <label className="text-[8px] font-bold text-green-800 uppercase">Leaf Green</label>
-                            </div>
-                            <input 
-                                readOnly={!isAdmin}
-                                type="text" 
-                                placeholder="Pokemon..." 
-                                value={localLink.p2}
-                                onChange={(e) => setLocalLink({...localLink, p2: e.target.value})}
-                            />
+                        <div className="bg-green-50 p-2 border border-green-100">
+                            <label className="text-[7px] font-bold text-green-800 block mb-1 uppercase">Leaf Green</label>
+                            <input readOnly={!isAdmin} value={localLink.p2} onChange={e => setLocalLink({...localLink, p2: e.target.value})} />
                         </div>
                     </div>
-
                     {isAdmin && (
-                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
-                            <button 
-                                onClick={handleSave}
-                                disabled={isSaving}
-                                className={`text-[8px] font-bold py-1 px-3 border-2 border-black rounded shadow-[2px_2px_0_#000] active:translate-y-1 active:shadow-none transition-all
-                                    ${saveError ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'}
-                                `}
-                            >
-                                {isSaving ? "SAVING..." : saveError ? "RETRY SAVE" : "SAVE LINK"}
+                        <div className="flex justify-between mt-2 pt-2 border-t border-gray-100">
+                            <button onClick={handleSave} disabled={isSaving} className="bg-blue-500 text-white text-[8px] font-bold py-1 px-3 border-2 border-black rounded shadow-[2px_2px_0_#000]">
+                                {isSaving ? "SAVING..." : "SAVE LINK"}
                             </button>
-                            
-                            {saveError && <span className="text-[7px] text-red-600 font-bold">{saveError}</span>}
-
-                            <button 
-                                onClick={() => { if(confirm("Release this link?")) onDelete(link.id); }}
-                                className="bg-red-600 hover:bg-red-700 text-white p-1 border-2 border-black shadow-md active:translate-y-1"
-                            >
-                                <TrashIcon />
-                            </button>
+                            <button onClick={() => confirm("Release?") && onDelete(link.id)} className="bg-red-600 p-1 border-2 border-black shadow-md"><TrashIcon /></button>
                         </div>
                     )}
                 </div>
             );
         };
 
-        // --- MAIN APP ---
         const App = () => {
             const [links, setLinks] = useState([]);
             const [isAdmin, setIsAdmin] = useState(false);
             const [showLogin, setShowLogin] = useState(false);
             const [email, setEmail] = useState("");
             const [password, setPassword] = useState("");
-            const [loading, setLoading] = useState(true);
-            const [globalError, setGlobalError] = useState(null);
+            const [notifications, setNotifications] = useState([]);
+
+            const addNotification = (message, type) => {
+                const id = Date.now();
+                setNotifications(prev => [...prev, { id, message, type }]);
+                setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 3000);
+            };
 
             useEffect(() => {
-                const q = query(collection(db, "links"), orderBy("createdAt", "desc"));
-                
-                const unsubscribe = onSnapshot(q, (snapshot) => {
-                    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    setLinks(data);
-                    setLoading(false);
-                    setGlobalError(null);
-                }, (error) => {
-                    console.error("Firestore Error:", error);
-                    setGlobalError("Connection Error: Data may be outdated.");
-                    setLoading(false);
-                });
-
-                onAuthStateChanged(auth, (u) => setIsAdmin(!!u));
-                
-                return () => unsubscribe();
+                const checkFB = setInterval(() => {
+                    if (window.db && window.fb) {
+                        clearInterval(checkFB);
+                        const q = window.fb.query(window.fb.collection(window.db, "links"), window.fb.orderBy("createdAt", "desc"));
+                        window.fb.onSnapshot(q, (snapshot) => {
+                            setLinks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                        });
+                        window.fb.onAuthStateChanged(window.auth, (u) => setIsAdmin(!!u));
+                    }
+                }, 100);
             }, []);
 
             const handleLogin = async (e) => {
                 e.preventDefault();
                 try {
-                    await signInWithEmailAndPassword(auth, email, password);
+                    await window.fb.signInWithEmailAndPassword(window.auth, email, password);
                     setShowLogin(false);
-                } catch (err) { alert("Login Failed: " + err.message); }
+                    addNotification("Logged In", "success");
+                } catch (err) { addNotification("Failed", "error"); }
             };
 
-            const addLink = async () => {
-                if (!isAdmin) return;
+            const addLink = () => {
                 const id = Date.now().toString();
-                try {
-                    await setDoc(doc(db, "links", id), { 
-                        id, zone: "", p1: "", p2: "", status: "alive", createdAt: Date.now() 
-                    });
-                } catch (e) { 
-                    alert("Permission Denied: Could not create row.");
-                    console.error(e); 
-                }
+                window.fb.setDoc(window.fb.doc(window.db, "links", id), { id, zone: "", p1: "", p2: "", status: "alive", createdAt: Date.now() });
             };
-
-            const updateLink = async (id, data) => {
-                if (!isAdmin) return;
-                // Return promise for component to handle error
-                return setDoc(doc(db, "links", id), data, { merge: true });
-            };
-
-            const deleteLink = async (id) => {
-                if (!isAdmin) return;
-                try {
-                    await deleteDoc(doc(db, "links", id));
-                } catch (e) { 
-                    alert("Permission Denied: Could not delete row.");
-                    console.error(e); 
-                }
-            };
-
-            const aliveCount = links.filter(l => l.status === 'alive').length;
-            const deadCount = links.filter(l => l.status === 'dead').length;
 
             return (
-                <div className="min-h-screen pb-24 max-w-lg mx-auto relative bg-[#2d1b4e] shadow-2xl border-x-4 border-[#1a1030]">
-                    
-                    {/* Header */}
-                    <div className="bg-[#506880] p-3 border-b-8 border-[#2d1b4e] sticky top-0 z-40 shadow-lg flex justify-between items-center">
-                        <div className="flex flex-col">
-                            <h1 className="text-white text-[10px] tracking-widest uppercase">Soul Link Live</h1>
-                            <div className="flex gap-2 text-[8px] text-gray-300 mt-1">
-                                <span className="text-green-300">ALIVE: {aliveCount}</span>
-                                <span className="text-red-300">DEAD: {deadCount}</span>
-                            </div>
-                        </div>
-                        
-                        <button 
-                            onClick={() => isAdmin ? signOut(auth) : setShowLogin(true)}
-                            className="bg-gray-700 text-white p-2 rounded border-2 border-gray-900 text-[8px] active:scale-95 transition-transform"
-                        >
+                <div className="min-h-screen pb-24 max-w-lg mx-auto bg-[#2d1b4e] border-x-4 border-[#1a1030]">
+                    <div className="bg-[#506880] p-3 border-b-8 border-[#2d1b4e] sticky top-0 z-50 flex justify-between items-center shadow-lg">
+                        <h1 className="text-white text-[10px] tracking-widest uppercase">Soul Link Live</h1>
+                        <button onClick={() => isAdmin ? window.fb.signOut(window.auth) : setShowLogin(true)} className="bg-gray-700 text-white p-2 border-2 border-gray-900 text-[8px]">
                             {isAdmin ? "LOGOUT" : "ADMIN"}
                         </button>
                     </div>
 
-                    {/* Global Error Message */}
-                    {globalError && (
-                        <div className="bg-red-600 text-white text-[7px] p-2 text-center sticky top-16 z-30 font-bold border-b-2 border-black">
-                            {globalError}
-                        </div>
-                    )}
+                    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 w-full max-w-xs z-[60] flex flex-col gap-2 p-4">
+                        {notifications.map(n => (
+                            <div key={n.id} className={`notification-banner p-3 border-2 border-black pixel-shadow text-[8px] font-bold text-center ${n.type === 'success' ? 'bg-green-400' : 'bg-red-400'}`}>
+                                {n.message}
+                            </div>
+                        ))}
+                    </div>
 
-                    {/* Login Modal */}
                     {showLogin && (
                         <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
                             <form onSubmit={handleLogin} className="bg-white p-6 border-4 border-black w-full max-w-xs pixel-shadow">
-                                <h2 className="text-[10px] mb-4 font-bold uppercase">Admin Login</h2>
+                                <h2 className="text-[10px] mb-4 font-bold uppercase">Login</h2>
                                 <input type="text" placeholder="EMAIL" className="mb-4" onChange={e => setEmail(e.target.value)} />
                                 <input type="password" placeholder="PASSWORD" className="mb-4" onChange={e => setPassword(e.target.value)} />
-                                <button className="w-full bg-blue-600 text-white py-3 text-[10px] font-bold border-2 border-black shadow-[4px_4px_0_#000] active:translate-y-1">SIGN IN</button>
+                                <button className="w-full bg-blue-600 text-white py-3 text-[10px] font-bold border-2 border-black">SIGN IN</button>
                                 <button type="button" onClick={() => setShowLogin(false)} className="w-full mt-4 text-[8px] text-gray-400">CANCEL</button>
                             </form>
                         </div>
                     )}
 
-                    {/* Main List Area */}
-                    <div className="p-4 bg-[#e0f8cf] min-h-[calc(100vh-140px)] screen-container relative">
-                        <div className="absolute inset-0 pointer-events-none opacity-10" 
-                             style={{backgroundImage: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06))', backgroundSize: '100% 2px, 3px 100%'}}>
-                        </div>
-
-                        {loading ? (
-                            <p className="text-center text-[10px] py-20 opacity-40">CONNECTING TO PC...</p>
-                        ) : links.length === 0 ? (
-                            <div className="text-center py-20 opacity-40 select-none">
-                                <div className="text-4xl mb-4">👾</div>
-                                <p className="text-xs mb-2 uppercase">No Data Found</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4 pb-4">
-                                {links.map(link => (
-                                    <SoulLinkRow 
-                                        key={link.id}
-                                        link={link}
-                                        isAdmin={isAdmin}
-                                        onUpdate={updateLink}
-                                        onDelete={deleteLink}
-                                    />
-                                ))}
-                            </div>
-                        )}
+                    <div className="p-4 bg-[#e0f8cf] min-h-[calc(100vh-140px)] screen-container">
+                        <div className="absolute inset-0 pointer-events-none opacity-10" style={{backgroundImage: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06))', backgroundSize: '100% 2px, 3px 100%'}}></div>
+                        {links.length === 0 ? <p className="text-center text-[10px] py-20 opacity-40 uppercase">No Data</p> : 
+                            links.map(l => <SoulLinkRow key={l.id} link={l} isAdmin={isAdmin} onUpdate={(id, data) => window.fb.setDoc(window.fb.doc(window.db, "links", id), data, {merge:true})} onDelete={id => window.fb.deleteDoc(window.fb.doc(window.db, "links", id))} addNotification={addNotification} />)}
                     </div>
 
-                    {/* Admin Footer Controls */}
                     {isAdmin && (
-                        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#2d1b4e] border-t-4 border-[#1a1030] flex justify-center items-center gap-4 max-w-lg mx-auto z-40">
-                            <button 
-                                onClick={addLink}
-                                className="
-                                    w-full bg-[#f0f0f0] text-[#2d1b4e] 
-                                    font-bold py-4 px-6 
-                                    shadow-[0_4px_0_#888] active:shadow-none active:translate-y-1
-                                    rounded border-2 border-[#888]
-                                    flex items-center justify-center gap-3
-                                    transition-all hover:bg-white
-                                "
-                            >
-                                <div className="w-6 h-6 rounded-full border-2 border-black flex items-center justify-center bg-red-500 text-white leading-none pb-0.5">+</div>
-                                <span className="text-xs tracking-wider uppercase">New Encounter</span>
-                            </button>
+                        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#2d1b4e] border-t-4 border-[#1a1030] max-w-lg mx-auto z-40">
+                            <button onClick={addLink} className="w-full bg-[#f0f0f0] text-[#2d1b4e] font-bold py-4 rounded border-2 border-[#888] shadow-[0_4px_0_#888] active:translate-y-1 text-xs">+ NEW ENCOUNTER</button>
                         </div>
                     )}
                 </div>
