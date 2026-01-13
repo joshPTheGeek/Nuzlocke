@@ -77,11 +77,10 @@
             authDomain: "josh-and-tom-nuzlocke.firebaseapp.com",
             projectId: "josh-and-tom-nuzlocke",
             storageBucket: "josh-and-tom-nuzlocke.firebasestorage.app",
-            messagingSenderId: "596955970030",
-            appId: "1:596955970030:web:4296388a8c62a3375eb6ff"
+            messagingSenderId: "5969970030",
+            appId: "1:596955970030:web:4296388aa3375eb6ff"
         };
 
-        // Attach to window so the React block can see them
         const app = initializeApp(firebaseConfig);
         window.db = getFirestore(app);
         window.auth = getAuth(app);
@@ -117,17 +116,32 @@
             const isDead = link.status === 'dead';
             const [localLink, setLocalLink] = useState(link);
             const [isSaving, setIsSaving] = useState(false);
+            const [saveError, setSaveError] = useState(null);
 
             useEffect(() => { setLocalLink(link); }, [link]);
 
             const handleSave = async () => {
                 setIsSaving(true);
+                setSaveError(null);
+                
+                const timeout = setTimeout(() => {
+                    if (isSaving) {
+                        setSaveError("TIMEOUT");
+                        setIsSaving(false);
+                    }
+                }, 5000);
+
                 try {
                     await onUpdate(link.id, localLink);
-                    addNotification("Link Saved!", "success");
+                    clearTimeout(timeout);
+                    addNotification("SAVED!", "success");
+                    setIsSaving(false);
                 } catch (err) {
-                    addNotification("Save Failed!", "error");
-                } finally { setIsSaving(false); }
+                    clearTimeout(timeout);
+                    setSaveError(err.code || "ERR");
+                    addNotification("FAILED!", "error");
+                    setIsSaving(false);
+                }
             };
 
             return (
@@ -135,7 +149,7 @@
                     <div className="flex justify-between items-start mb-3 border-b-2 border-gray-200 pb-2">
                         <div className="w-2/3">
                             <label className="text-[8px] text-gray-500 block mb-1">Zone / Route</label>
-                            <input readOnly={!isAdmin} className="font-bold text-indigo-900 uppercase" value={localLink.zone} onChange={e => setLocalLink({...localLink, zone: e.target.value})} />
+                            <input readOnly={!isAdmin} className="font-bold text-indigo-900 uppercase focus:outline-none" value={localLink.zone} onChange={e => setLocalLink({...localLink, zone: e.target.value})} />
                         </div>
                         <button disabled={!isAdmin} onClick={() => onUpdate(link.id, {...link, status: isDead ? 'alive' : 'dead'})} className={`flex flex-col items-center p-2 rounded border-2 ${isDead ? 'bg-gray-300' : 'bg-yellow-100 border-yellow-400'}`}>
                             {isDead ? <SkullIcon /> : <HappyFaceIcon />}
@@ -144,19 +158,21 @@
                     </div>
                     <div className="grid grid-cols-2 gap-4 mb-2">
                         <div className="bg-red-50 p-2 border border-red-100">
-                            <label className="text-[7px] font-bold text-red-800 block mb-1 uppercase">Fire Red</label>
-                            <input readOnly={!isAdmin} value={localLink.p1} onChange={e => setLocalLink({...localLink, p1: e.target.value})} />
+                            <label className="text-[7px] font-bold text-red-800 block mb-1 uppercase tracking-tighter">Fire Red</label>
+                            <input readOnly={!isAdmin} className="bg-transparent w-full text-[10px] focus:outline-none" value={localLink.p1} onChange={e => setLocalLink({...localLink, p1: e.target.value})} />
                         </div>
                         <div className="bg-green-50 p-2 border border-green-100">
-                            <label className="text-[7px] font-bold text-green-800 block mb-1 uppercase">Leaf Green</label>
-                            <input readOnly={!isAdmin} value={localLink.p2} onChange={e => setLocalLink({...localLink, p2: e.target.value})} />
+                            <label className="text-[7px] font-bold text-green-800 block mb-1 uppercase tracking-tighter">Leaf Green</label>
+                            <input readOnly={!isAdmin} className="bg-transparent w-full text-[10px] focus:outline-none" value={localLink.p2} onChange={e => setLocalLink({...localLink, p2: e.target.value})} />
                         </div>
                     </div>
                     {isAdmin && (
-                        <div className="flex justify-between mt-2 pt-2 border-t border-gray-100">
-                            <button onClick={handleSave} disabled={isSaving} className="bg-blue-500 text-white text-[8px] font-bold py-1 px-3 border-2 border-black rounded shadow-[2px_2px_0_#000]">
-                                {isSaving ? "SAVING..." : "SAVE LINK"}
-                            </button>
+                        <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
+                            <div className="flex items-center gap-2">
+                                <button onClick={handleSave} disabled={isSaving} className={`text-[8px] font-bold py-1 px-3 border-2 border-black rounded shadow-[2px_2px_0_#000] active:translate-y-1 active:shadow-none transition-all ${saveError ? 'bg-red-500' : 'bg-blue-500'} text-white`}>
+                                    {isSaving ? "SAVING..." : saveError ? `RETRY (${saveError})` : "SAVE LINK"}
+                                </button>
+                            </div>
                             <button onClick={() => confirm("Release?") && onDelete(link.id)} className="bg-red-600 p-1 border-2 border-black shadow-md"><TrashIcon /></button>
                         </div>
                     )}
@@ -171,6 +187,7 @@
             const [email, setEmail] = useState("");
             const [password, setPassword] = useState("");
             const [notifications, setNotifications] = useState([]);
+            const [lastError, setLastError] = useState(null);
 
             const addNotification = (message, type) => {
                 const id = Date.now();
@@ -182,13 +199,17 @@
                 const checkFB = setInterval(() => {
                     if (window.db && window.fb) {
                         clearInterval(checkFB);
-                        const q = window.fb.query(window.fb.collection(window.db, "links"), window.fb.orderBy("createdAt", "desc"));
-                        window.fb.onSnapshot(q, (snapshot) => {
-                            setLinks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                        });
-                        window.fb.onAuthStateChanged(window.auth, (u) => setIsAdmin(!!u));
+                        try {
+                            const q = window.fb.query(window.fb.collection(window.db, "links"), window.fb.orderBy("createdAt", "desc"));
+                            window.fb.onSnapshot(q, (snapshot) => {
+                                setLinks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                            }, (err) => {
+                                setLastError(`Stream Error: ${err.code}`);
+                            });
+                            window.fb.onAuthStateChanged(window.auth, (u) => setIsAdmin(!!u));
+                        } catch (e) { setLastError(`Init Error: ${e.message}`); }
                     }
-                }, 100);
+                }, 200);
             }, []);
 
             const handleLogin = async (e) => {
@@ -196,20 +217,29 @@
                 try {
                     await window.fb.signInWithEmailAndPassword(window.auth, email, password);
                     setShowLogin(false);
-                    addNotification("Logged In", "success");
-                } catch (err) { addNotification("Failed", "error"); }
+                    addNotification("LOGGED IN", "success");
+                } catch (err) { addNotification(err.code || "FAILED", "error"); }
             };
 
             const addLink = () => {
                 const id = Date.now().toString();
-                window.fb.setDoc(window.fb.doc(window.db, "links", id), { id, zone: "", p1: "", p2: "", status: "alive", createdAt: Date.now() });
+                window.fb.setDoc(window.fb.doc(window.db, "links", id), { id, zone: "", p1: "", p2: "", status: "alive", createdAt: Date.now() })
+                    .catch(e => setLastError(`Add Fail: ${e.code}`));
             };
 
             return (
-                <div className="min-h-screen pb-24 max-w-lg mx-auto bg-[#2d1b4e] border-x-4 border-[#1a1030]">
+                <div className="min-h-screen pb-24 max-w-lg mx-auto bg-[#2d1b4e] border-x-4 border-[#1a1030] relative">
+                    
+                    {/* Error Monitor (Admin Only) */}
+                    {lastError && (
+                        <div className="bg-red-600 text-white text-[7px] p-1 text-center font-bold absolute top-0 left-0 right-0 z-[100] border-b border-black">
+                            SYSTEM LOG: {lastError} | <button onClick={() => setLastError(null)}>CLEAR</button>
+                        </div>
+                    )}
+
                     <div className="bg-[#506880] p-3 border-b-8 border-[#2d1b4e] sticky top-0 z-50 flex justify-between items-center shadow-lg">
                         <h1 className="text-white text-[10px] tracking-widest uppercase">Soul Link Live</h1>
-                        <button onClick={() => isAdmin ? window.fb.signOut(window.auth) : setShowLogin(true)} className="bg-gray-700 text-white p-2 border-2 border-gray-900 text-[8px]">
+                        <button onClick={() => isAdmin ? window.fb.signOut(window.auth) : setShowLogin(true)} className="bg-gray-700 text-white p-2 border-2 border-gray-900 text-[8px] active:scale-95">
                             {isAdmin ? "LOGOUT" : "ADMIN"}
                         </button>
                     </div>
@@ -229,20 +259,20 @@
                                 <input type="text" placeholder="EMAIL" className="mb-4" onChange={e => setEmail(e.target.value)} />
                                 <input type="password" placeholder="PASSWORD" className="mb-4" onChange={e => setPassword(e.target.value)} />
                                 <button className="w-full bg-blue-600 text-white py-3 text-[10px] font-bold border-2 border-black">SIGN IN</button>
-                                <button type="button" onClick={() => setShowLogin(false)} className="w-full mt-4 text-[8px] text-gray-400">CANCEL</button>
+                                <button type="button" onClick={() => setShowLogin(false)} className="w-full mt-4 text-[8px] text-gray-400 underline">CANCEL</button>
                             </form>
                         </div>
                     )}
 
                     <div className="p-4 bg-[#e0f8cf] min-h-[calc(100vh-140px)] screen-container">
                         <div className="absolute inset-0 pointer-events-none opacity-10" style={{backgroundImage: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06))', backgroundSize: '100% 2px, 3px 100%'}}></div>
-                        {links.length === 0 ? <p className="text-center text-[10px] py-20 opacity-40 uppercase">No Data</p> : 
-                            links.map(l => <SoulLinkRow key={l.id} link={l} isAdmin={isAdmin} onUpdate={(id, data) => window.fb.setDoc(window.fb.doc(window.db, "links", id), data, {merge:true})} onDelete={id => window.fb.deleteDoc(window.fb.doc(window.db, "links", id))} addNotification={addNotification} />)}
+                        {links.length === 0 ? <p className="text-center text-[10px] py-20 opacity-40 uppercase">Connecting to PC...</p> : 
+                            links.map(l => <SoulLinkRow key={l.id} link={l} isAdmin={isAdmin} addNotification={addNotification} onUpdate={(id, data) => window.fb.setDoc(window.fb.doc(window.db, "links", id), data, {merge:true})} onDelete={id => window.fb.deleteDoc(window.fb.doc(window.db, "links", id))} />)}
                     </div>
 
                     {isAdmin && (
-                        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#2d1b4e] border-t-4 border-[#1a1030] max-w-lg mx-auto z-40">
-                            <button onClick={addLink} className="w-full bg-[#f0f0f0] text-[#2d1b4e] font-bold py-4 rounded border-2 border-[#888] shadow-[0_4px_0_#888] active:translate-y-1 text-xs">+ NEW ENCOUNTER</button>
+                        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#2d1b4e] border-t-4 border-[#1a1030] max-w-lg mx-auto z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+                            <button onClick={addLink} className="w-full bg-[#f0f0f0] text-[#2d1b4e] font-bold py-4 rounded border-2 border-[#888] shadow-[0_4px_0_#888] active:translate-y-1 active:shadow-none text-[10px] tracking-tighter uppercase transition-all">+ New Encounter</button>
                         </div>
                     )}
                 </div>
