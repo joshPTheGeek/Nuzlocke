@@ -110,7 +110,9 @@
 
                             window.fb.onAuthStateChanged(window.auth, (user) => {
                                 setIsAdmin(!!user);
-                                if (user) setErrorLog(`Auth: Logged in as ${user.email}`);
+                                if (user) {
+                                    setErrorLog(""); // Clear errors on success
+                                }
                             });
 
                         } catch (e) {
@@ -122,14 +124,28 @@
 
             const handleLogin = async (e) => {
                 e.preventDefault();
-                setErrorLog("Authenticating...");
+                setErrorLog("SIGNING IN...");
                 try {
                     await window.fb.signInWithEmailAndPassword(window.auth, email, password);
                     setShowLogin(false);
+                    setErrorLog("");
                 } catch (err) { 
-                    setErrorLog(`Auth Error: ${err.code}`);
-                    if (err.code === 'auth/unauthorized-domain') {
-                        setErrorLog("BLOCKED: joshpthegeek.github.io is not authorized in Firebase Console.");
+                    console.error("Login Error:", err.code);
+                    // Detailed Error Handling
+                    switch (err.code) {
+                        case 'auth/unauthorized-domain':
+                            setErrorLog("DOMAIN BLOCKED: Add joshpthegeek.github.io to Firebase Auth settings.");
+                            break;
+                        case 'auth/user-not-found':
+                        case 'auth/wrong-password':
+                        case 'auth/invalid-credential':
+                            setErrorLog("LOGIN FAILED: Wrong email or password.");
+                            break;
+                        case 'auth/network-request-failed':
+                            setErrorLog("NETWORK ERROR: Check your connection.");
+                            break;
+                        default:
+                            setErrorLog(`LOGIN ERROR: ${err.code}`);
                     }
                 }
             };
@@ -257,8 +273,8 @@
 
                     {/* Error Console (For Debugging the Domain issue) */}
                     {errorLog && (
-                        <div className="bg-black text-white p-2 text-[6px] fixed bottom-0 left-0 right-0 z-[200] opacity-90 max-w-md mx-auto">
-                            CONSOLE: {errorLog}
+                        <div className="bg-black text-white p-3 text-[7px] fixed bottom-0 left-0 right-0 z-[200] opacity-95 max-w-md mx-auto border-t-2 border-red-500">
+                            SYSTEM LOG: {errorLog}
                         </div>
                     )}
 
