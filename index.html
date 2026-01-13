@@ -105,7 +105,11 @@
                                 setErrorLog("");
                             }, (err) => {
                                 setConnStatus("ERROR");
-                                setErrorLog(`DB Error: ${err.code}`);
+                                if (err.message.toLowerCase().includes('blocked') || err.message.toLowerCase().includes('referer')) {
+                                    setErrorLog("API KEY BLOCKED: Go to Google Cloud Console > Credentials. Ensure 'joshpthegeek.github.io/*' is allowed under Website Restrictions.");
+                                } else {
+                                    setErrorLog(`DB Error: ${err.code}`);
+                                }
                             });
 
                             window.fb.onAuthStateChanged(window.auth, (user) => {
@@ -130,22 +134,24 @@
                     setShowLogin(false);
                     setErrorLog("");
                 } catch (err) { 
-                    console.error("Login Error:", err.code);
-                    // Detailed Error Handling
-                    switch (err.code) {
-                        case 'auth/unauthorized-domain':
-                            setErrorLog("DOMAIN BLOCKED: Add joshpthegeek.github.io to Firebase Auth settings.");
-                            break;
-                        case 'auth/user-not-found':
-                        case 'auth/wrong-password':
-                        case 'auth/invalid-credential':
-                            setErrorLog("LOGIN FAILED: Wrong email or password.");
-                            break;
-                        case 'auth/network-request-failed':
-                            setErrorLog("NETWORK ERROR: Check your connection.");
-                            break;
-                        default:
-                            setErrorLog(`LOGIN ERROR: ${err.code}`);
+                    console.error("Login Error:", err);
+                    const msg = err.message || "";
+                    
+                    if (msg.toLowerCase().includes('blocked') || msg.toLowerCase().includes('referer')) {
+                        setErrorLog("API KEY RESTRICTED: Check Google Cloud Console. Your API Key is currently blocking requests from this referer URL.");
+                    } else {
+                        switch (err.code) {
+                            case 'auth/unauthorized-domain':
+                                setErrorLog("DOMAIN BLOCKED: Add joshpthegeek.github.io to Firebase Auth settings.");
+                                break;
+                            case 'auth/user-not-found':
+                            case 'auth/wrong-password':
+                            case 'auth/invalid-credential':
+                                setErrorLog("LOGIN FAILED: Wrong email or password.");
+                                break;
+                            default:
+                                setErrorLog(`LOGIN ERROR: ${err.code || 'Unknown'}`);
+                        }
                     }
                 }
             };
