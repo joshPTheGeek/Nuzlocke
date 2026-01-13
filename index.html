@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Soul Link Sync</title>
+    <title>Soul Link Sync: Retro Edition</title>
     <!-- React & Tailwind -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -14,38 +14,58 @@
         :root {
             --gba-purple: #2d1b4e;
             --gba-screen-bg: #e0f8cf;
+            --pkmn-red: #cc0000;
+            --pkmn-blue: #3b4cca;
+            --pkmn-ui-blue: #3050c0;
         }
-        body { 
-            font-family: 'Press Start 2P', cursive; 
-            background: #202020; 
-            color: #333; 
-            margin: 0;
-            padding: 0;
+
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #202020;
+            background-image: 
+                linear-gradient(45deg, #252525 25%, transparent 25%), 
+                linear-gradient(-45deg, #252525 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #252525 75%), 
+                linear-gradient(-45deg, transparent 75%, #252525 75%);
+            background-size: 40px 40px;
+            color: #333;
+            overflow-x: hidden;
+            touch-action: manipulation;
         }
+
+        input {
+            font-family: 'Press Start 2P', cursive;
+            outline: none;
+        }
+
         .pixel-shadow { box-shadow: 4px 4px 0 rgba(0,0,0,0.5); }
+        
         .gba-screen { 
             background-color: var(--gba-screen-bg); 
             min-height: 75vh; 
             position: relative;
             box-shadow: inset 0 0 40px rgba(0,0,0,0.1);
         }
-        .status-dead { 
-            filter: grayscale(100%); 
-            opacity: 0.7; 
-            background: #cbd5e1 !important; 
+
+        .status-dead {
+            filter: grayscale(100%) contrast(1.1);
+            opacity: 0.8;
+            background-color: #dcdcdc !important;
+            border-color: #555 !important;
         }
-        input { 
-            font-family: 'Press Start 2P', cursive; 
-            outline: none;
-        }
+        .status-dead input { text-decoration: line-through; color: #555; }
+
         .scanline {
             width: 100%;
             height: 2px;
-            background: rgba(0, 0, 0, 0.1);
+            background: rgba(0, 0, 0, 0.05);
             position: absolute;
             z-index: 10;
             pointer-events: none;
         }
+
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+        .animate-happy { animation: bounce 2s infinite; }
     </style>
 </head>
 <body>
@@ -69,7 +89,6 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // Global access for the React component
         window.db = db;
         window.auth = auth;
         window.fb = { collection, doc, onSnapshot, setDoc, query, orderBy, deleteDoc, signInWithEmailAndPassword, onAuthStateChanged, signOut };
@@ -77,6 +96,68 @@
 
     <script type="text/babel">
         const { useState, useEffect } = React;
+
+        // --- AUDIO ENGINE ---
+        const AudioEngine = {
+            ctx: null,
+            init: () => {
+                if (!AudioEngine.ctx) AudioEngine.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            },
+            play: (type) => {
+                AudioEngine.init();
+                const ctx = AudioEngine.ctx;
+                if(ctx.state === 'suspended') ctx.resume();
+                
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                const now = ctx.currentTime;
+
+                if (type === 'tap') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(600, now + 0.05);
+                    gain.gain.setValueAtTime(0.05, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                } else if (type === 'dead') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.linearRampToValueAtTime(80, now + 0.4);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.4);
+                    osc.start(now);
+                    osc.stop(now + 0.4);
+                } else if (type === 'revive') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.linearRampToValueAtTime(880, now + 0.1);
+                    osc.frequency.linearRampToValueAtTime(1200, now + 0.2);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                }
+            }
+        };
+
+        // --- ICONS ---
+        const HappyFaceIcon = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" className="text-yellow-500 animate-happy filter drop-shadow-sm">
+                <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-9h2v2H7zm8 0h2v2h-2zm-4 4c-2.33 0-4.31 1.46-5.11 3.5h10.22c-.8-2.04-2.78-3.5-5.11-3.5z"/>
+                <circle cx="5.5" cy="13.5" r="1.5" fill="#ff4444" opacity="0.6" />
+                <circle cx="18.5" cy="13.5" r="1.5" fill="#ff4444" opacity="0.6" />
+            </svg>
+        );
+
+        const SkullIcon = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" className="text-gray-700">
+                <path fill="currentColor" d="M12 2c-4.42 0-8 3.58-8 8 0 2.23.91 4.24 2.38 5.71L5 18h14l-1.38-2.29C19.09 14.24 20 12.23 20 10c0-4.42-3.58-8-8-8zm0 10c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm-4-2c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2 .9 2 2 2z"/>
+                <path fill="currentColor" d="M8 19h2v3H8zm6 0h2v3h-2z"/>
+            </svg>
+        );
 
         const App = () => {
             const [links, setLinks] = useState([]);
@@ -92,36 +173,22 @@
                     if (window.db && window.fb) {
                         clearInterval(initSync);
                         setConnStatus("CONNECTING...");
-                        
                         try {
-                            const q = window.fb.query(
-                                window.fb.collection(window.db, "links"), 
-                                window.fb.orderBy("createdAt", "desc")
-                            );
-                            
+                            const q = window.fb.query(window.fb.collection(window.db, "links"), window.fb.orderBy("createdAt", "desc"));
                             const unsub = window.fb.onSnapshot(q, (snapshot) => {
                                 setLinks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                                 setConnStatus("ONLINE");
                                 setErrorLog("");
                             }, (err) => {
                                 setConnStatus("ERROR");
-                                if (err.message.toLowerCase().includes('blocked') || err.message.toLowerCase().includes('referer')) {
-                                    setErrorLog("API KEY BLOCKED: Go to Google Cloud Console > Credentials. Ensure 'joshpthegeek.github.io/*' is allowed under Website Restrictions.");
+                                if (err.message.toLowerCase().includes('referer')) {
+                                    setErrorLog("API KEY BLOCKED: In Google Cloud Console, ensure 'joshpthegeek.github.io/*' is allowed.");
                                 } else {
                                     setErrorLog(`DB Error: ${err.code}`);
                                 }
                             });
-
-                            window.fb.onAuthStateChanged(window.auth, (user) => {
-                                setIsAdmin(!!user);
-                                if (user) {
-                                    setErrorLog(""); // Clear errors on success
-                                }
-                            });
-
-                        } catch (e) {
-                            setErrorLog(`Init Failure: ${e.message}`);
-                        }
+                            window.fb.onAuthStateChanged(window.auth, (user) => setIsAdmin(!!user));
+                        } catch (e) { setErrorLog(`Init Failure: ${e.message}`); }
                     }
                 }, 500);
             }, []);
@@ -133,51 +200,27 @@
                     await window.fb.signInWithEmailAndPassword(window.auth, email, password);
                     setShowLogin(false);
                     setErrorLog("");
-                } catch (err) { 
-                    console.error("Login Error:", err);
-                    const msg = err.message || "";
-                    
-                    if (msg.toLowerCase().includes('blocked') || msg.toLowerCase().includes('referer')) {
-                        setErrorLog("API KEY RESTRICTED: Check Google Cloud Console. Your API Key is currently blocking requests from this referer URL.");
-                    } else {
-                        switch (err.code) {
-                            case 'auth/unauthorized-domain':
-                                setErrorLog("DOMAIN BLOCKED: Add joshpthegeek.github.io to Firebase Auth settings.");
-                                break;
-                            case 'auth/user-not-found':
-                            case 'auth/wrong-password':
-                            case 'auth/invalid-credential':
-                                setErrorLog("LOGIN FAILED: Wrong email or password.");
-                                break;
-                            default:
-                                setErrorLog(`LOGIN ERROR: ${err.code || 'Unknown'}`);
-                        }
-                    }
+                } catch (err) {
+                    setErrorLog(`LOGIN FAILED: ${err.code}`);
                 }
             };
 
             const addEncounter = async () => {
                 if (!isAdmin) return;
+                AudioEngine.play('tap');
                 const id = Date.now().toString();
                 try {
                     await window.fb.setDoc(window.fb.doc(window.db, "links", id), {
-                        id, 
-                        zone: "NEW ROUTE", 
-                        p1: "???", 
-                        p2: "???", 
-                        status: "alive", 
-                        createdAt: Date.now()
+                        id, zone: "NEW ROUTE", p1: "???", p2: "???", status: "alive", createdAt: Date.now()
                     });
-                } catch (e) {
-                    setErrorLog(`Write Error: ${e.code}`);
-                }
+                } catch (e) { setErrorLog(`Write Error: ${e.code}`); }
             };
 
             const toggleStatus = (link) => {
                 if (!isAdmin) return;
-                window.fb.setDoc(window.fb.doc(window.db, "links", link.id), {
-                    status: link.status === 'dead' ? 'alive' : 'dead'
-                }, { merge: true });
+                const newStatus = link.status === 'dead' ? 'alive' : 'dead';
+                AudioEngine.play(newStatus === 'dead' ? 'dead' : 'revive');
+                window.fb.setDoc(window.fb.doc(window.db, "links", link.id), { status: newStatus }, { merge: true });
             };
 
             const updateField = (id, field, value) => {
@@ -185,48 +228,60 @@
                 window.fb.setDoc(window.fb.doc(window.db, "links", id), { [field]: value }, { merge: true });
             };
 
+            const aliveCount = links.filter(l => l.status === 'alive').length;
+            const deadCount = links.filter(l => l.status === 'dead').length;
+
             return (
-                <div className="max-w-md mx-auto bg-[#2d1b4e] min-h-screen border-x-8 border-black shadow-2xl relative flex flex-col">
-                    {/* Top Status Bar */}
-                    <div className={`p-2 text-[7px] text-center text-white flex justify-between px-4 ${connStatus === 'ONLINE' ? 'bg-green-600' : 'bg-red-600'}`}>
-                        <span>SYS: {connStatus}</span>
-                        <span>{isAdmin ? "MODE: ADMIN" : "MODE: SPECTATOR"}</span>
+                <div className="max-w-lg mx-auto bg-[#2d1b4e] min-h-screen border-x-4 border-[#1a1030] shadow-2xl relative flex flex-col">
+                    {/* Status Monitor */}
+                    <div className={`p-1 text-[7px] text-center text-white flex justify-between px-4 sticky top-0 z-[100] ${connStatus === 'ONLINE' ? 'bg-green-600' : 'bg-red-600'}`}>
+                        <span>DATABASE: {connStatus}</span>
+                        <span>ALIVE: {aliveCount} | DEAD: {deadCount}</span>
                     </div>
 
-                    {/* Header */}
-                    <div className="p-4 flex justify-between items-center border-b-4 border-black bg-[#506880]">
-                        <h1 className="text-white text-[10px] tracking-tight">SOUL LINK LIVE</h1>
-                        <button 
-                            onClick={() => isAdmin ? window.fb.signOut(window.auth) : setShowLogin(true)} 
-                            className="bg-white px-3 py-2 border-2 border-black text-[8px] active:translate-y-1 active:shadow-none shadow-[2px_2px_0_#000]"
-                        >
-                            {isAdmin ? "LOGOUT" : "LOGIN"}
+                    {/* Retro Header */}
+                    <div className="bg-[#506880] p-4 border-b-8 border-[#2d1b4e] flex justify-between items-center shadow-lg">
+                        <div className="flex flex-col">
+                            <h1 className="text-white text-[10px] tracking-widest uppercase">Soul Link Live</h1>
+                            <span className="text-white opacity-50 text-[6px] mt-1">{isAdmin ? "ADMIN CONTROL" : "SPECTATOR MODE"}</span>
+                        </div>
+                        <button onClick={() => isAdmin ? window.fb.signOut(window.auth) : setShowLogin(true)} className="bg-gray-700 text-white p-2 border-2 border-gray-900 text-[8px] active:scale-95 shadow-[2px_2px_0_#000]">
+                            {isAdmin ? "EXIT" : "LOGIN"}
                         </button>
                     </div>
 
-                    {/* Game Screen */}
+                    {/* Game Screen Content */}
                     <div className="gba-screen p-4 flex-grow overflow-y-auto">
                         <div className="scanline" style={{top: '20%'}}></div>
                         
                         {links.length === 0 && connStatus === "ONLINE" && (
-                            <div className="text-center mt-20 text-[8px] opacity-40">NO SAVED DATA</div>
+                            <div className="text-center py-20 opacity-30 uppercase">
+                                <p className="text-[10px] mb-2">No Links Saved</p>
+                                <p className="text-[6px]">Start a new encounter below</p>
+                            </div>
                         )}
 
                         {links.map(link => (
-                            <div key={link.id} className={`p-4 mb-4 border-4 border-black bg-white pixel-shadow relative transition-all ${link.status === 'dead' ? 'status-dead' : ''}`}>
-                                <div className="mb-3 flex items-center gap-2">
-                                    <span className="text-[6px] text-gray-400">LOC:</span>
-                                    <input 
-                                        className="bg-transparent border-b-2 border-dotted border-gray-300 w-full uppercase text-[10px] font-bold text-indigo-900"
-                                        value={link.zone}
-                                        onChange={(e) => updateField(link.id, 'zone', e.target.value)}
-                                        readOnly={!isAdmin}
-                                    />
+                            <div key={link.id} className={`p-3 mb-4 border-4 rounded-sm transition-all duration-300 pixel-shadow relative ${link.status === 'dead' ? 'status-dead border-gray-600 bg-gray-200' : 'border-indigo-900 bg-white'}`}>
+                                <div className="flex justify-between items-start mb-3 border-b-2 border-gray-200 pb-2">
+                                    <div className="w-2/3">
+                                        <label className="text-[7px] text-gray-500 uppercase block mb-1">Zone / Route</label>
+                                        <input 
+                                            className="bg-transparent w-full uppercase text-[10px] font-bold text-indigo-900 focus:bg-white/50"
+                                            value={link.zone}
+                                            onChange={(e) => updateField(link.id, 'zone', e.target.value)}
+                                            readOnly={!isAdmin}
+                                        />
+                                    </div>
+                                    <button onClick={() => toggleStatus(link)} disabled={!isAdmin} className={`flex flex-col items-center p-2 rounded border-2 ${link.status === 'dead' ? 'bg-gray-300 border-gray-500' : 'bg-yellow-100 border-yellow-400'}`}>
+                                        {link.status === 'dead' ? <SkullIcon /> : <HappyFaceIcon />}
+                                        <span className="text-[7px] mt-1 font-bold">{link.status === 'dead' ? "DEAD" : "LIVE"}</span>
+                                    </button>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-red-50 p-2 border-2 border-red-200 rounded">
-                                        <div className="text-[6px] text-red-400 mb-1">FIRE RED</div>
+                                    <div className="bg-red-50 p-2 border border-red-100 rounded">
+                                        <label className="text-[6px] font-bold text-red-800 block mb-1">FIRE RED</label>
                                         <input 
                                             className="bg-transparent w-full text-[8px] uppercase" 
                                             value={link.p1} 
@@ -234,8 +289,8 @@
                                             readOnly={!isAdmin} 
                                         />
                                     </div>
-                                    <div className="bg-green-50 p-2 border-2 border-green-200 rounded">
-                                        <div className="text-[6px] text-green-400 mb-1">LEAF GREEN</div>
+                                    <div className="bg-green-50 p-2 border border-green-100 rounded">
+                                        <label className="text-[6px] font-bold text-green-800 block mb-1">LEAF GREEN</label>
                                         <input 
                                             className="bg-transparent w-full text-[8px] uppercase" 
                                             value={link.p2} 
@@ -244,71 +299,38 @@
                                         />
                                     </div>
                                 </div>
-
                                 {isAdmin && (
-                                    <div className="mt-3 flex justify-between items-center pt-2 border-t border-gray-100">
-                                        <button 
-                                            onClick={() => toggleStatus(link)} 
-                                            className={`text-[7px] p-2 border-2 border-black font-bold ${link.status === 'dead' ? 'bg-green-400' : 'bg-red-500 text-white'}`}
-                                        >
-                                            {link.status === 'dead' ? 'REVIVE' : 'MARK DEAD'}
-                                        </button>
-                                        <button 
-                                            onClick={() => confirm("Release PKMN?") && window.fb.deleteDoc(window.fb.doc(window.db, "links", link.id))} 
-                                            className="text-[6px] text-gray-400 underline"
-                                        >
-                                            RELEASE
-                                        </button>
-                                    </div>
+                                    <button onClick={() => confirm("Release PKMN?") && window.fb.deleteDoc(window.fb.doc(window.db, "links", link.id))} className="absolute -top-2 -right-2 bg-red-600 text-white p-1 border-2 border-black text-[6px] shadow-md">X</button>
                                 )}
                             </div>
                         ))}
                     </div>
 
-                    {/* Admin Footer */}
+                    {/* Admin Action Bar */}
                     {isAdmin && (
-                        <div className="p-4 bg-[#2d1b4e] border-t-4 border-black sticky bottom-0 z-50">
-                            <button 
-                                onClick={addEncounter} 
-                                className="w-full bg-yellow-400 py-4 border-4 border-black text-[10px] font-bold shadow-[4px_4px_0_#000] active:translate-y-1 active:shadow-none"
-                            >
+                        <div className="p-4 bg-[#2d1b4e] border-t-4 border-[#1a1030] sticky bottom-0 z-50">
+                            <button onClick={addEncounter} className="w-full bg-[#f0f0f0] text-[#2d1b4e] font-bold py-4 border-4 border-black pixel-shadow active:translate-y-1 active:shadow-none text-[10px] tracking-widest uppercase">
                                 + NEW ENCOUNTER
                             </button>
                         </div>
                     )}
 
-                    {/* Error Console (For Debugging the Domain issue) */}
+                    {/* Global Log / Error Console */}
                     {errorLog && (
-                        <div className="bg-black text-white p-3 text-[7px] fixed bottom-0 left-0 right-0 z-[200] opacity-95 max-w-md mx-auto border-t-2 border-red-500">
+                        <div className="bg-black text-white p-3 text-[7px] fixed bottom-0 left-0 right-0 z-[200] opacity-95 max-w-lg mx-auto border-t-2 border-red-500">
                             SYSTEM LOG: {errorLog}
                         </div>
                     )}
 
-                    {/* Login Modal */}
+                    {/* Modal: Admin Login */}
                     {showLogin && (
                         <div className="fixed inset-0 bg-black/90 z-[300] flex items-center justify-center p-6">
                             <form onSubmit={handleLogin} className="bg-white p-6 border-4 border-black w-full max-w-xs pixel-shadow">
-                                <h2 className="text-[10px] mb-4 font-bold">ADMIN LOGIN</h2>
-                                <input 
-                                    type="text" 
-                                    placeholder="EMAIL" 
-                                    className="w-full mb-4 p-2 border-2 border-black text-[10px]" 
-                                    onChange={e => setEmail(e.target.value)} 
-                                />
-                                <input 
-                                    type="password" 
-                                    placeholder="PASSWORD" 
-                                    className="w-full mb-4 p-2 border-2 border-black text-[10px]" 
-                                    onChange={e => setPassword(e.target.value)} 
-                                />
-                                <button className="w-full bg-blue-600 text-white py-3 border-2 border-black text-[10px]">SIGN IN</button>
-                                <button 
-                                    type="button" 
-                                    onClick={() => setShowLogin(false)} 
-                                    className="w-full mt-4 text-[8px] text-gray-500 underline"
-                                >
-                                    BACK
-                                </button>
+                                <h2 className="text-[10px] mb-6 font-bold uppercase tracking-tighter">Enter Admin Card</h2>
+                                <input type="text" placeholder="EMAIL" className="w-full mb-4 p-3 border-2 border-black text-[10px] bg-gray-50" onChange={e => setEmail(e.target.value)} />
+                                <input type="password" placeholder="PASSWORD" className="w-full mb-6 p-3 border-2 border-black text-[10px] bg-gray-50" onChange={e => setPassword(e.target.value)} />
+                                <button className="w-full bg-blue-600 text-white py-3 border-2 border-black text-[10px] font-bold shadow-[3px_3px_0_#000] active:translate-y-1 active:shadow-none">SIGN IN</button>
+                                <button type="button" onClick={() => setShowLogin(false)} className="w-full mt-4 text-[8px] text-gray-400 underline uppercase">Cancel</button>
                             </form>
                         </div>
                     )}
